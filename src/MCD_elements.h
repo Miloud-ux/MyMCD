@@ -1,8 +1,9 @@
 #ifndef SCR_MCD_ELEMENTS_H_
 #define SCR_MCD_ELEMENTS_H_
 
-#define MAX_NAME_LEN 50
-#define MAX_TYPE_LEN 20
+#define MAX_NAME_LEN 14
+#define MAX_TYPE_LEN 6
+#define CARDINALITY_LEN 4
 #define MAX_PROPERTIES 20
 
 typedef struct {
@@ -15,10 +16,30 @@ typedef struct {
         int height, width;
         char name[MAX_NAME_LEN];
         int num_properties;
-        Property properties[MAX_PROPERTIES];
+        Property *properties[MAX_PROPERTIES];
 } Entity;
+
+typedef struct {
+        char value[CARDINALITY_LEN];
+} Cardinality;
+
+typedef struct {
+        int x, y;
+        int height, width; // currently it's rectangle TODO : make it oval
+        char name[MAX_NAME_LEN];
+        Entity *e1;
+        Entity *e2;
+        int num_properties;
+        Property *properties[MAX_PROPERTIES];
+        Cardinality *cards[2];
+} Relationship;
 
 Entity *createEntity(const char *name, int x, int y);
 void addProperty(Entity *e, const char *prop_name, const char *prop_type);
+Relationship *addRelationship(int x, int y, Entity *e1, Entity *e2,
+                              const char *name);
+void addCardinality(const char *input, Cardinality *c1, Cardinality *c2);
+void tokenizeCardinalityInput(const char *input, char *card1, char *card2);
+void addCardinalityAPI(const char *input, Relationship *r);
 
 #endif // SCR_MCD_ELEMENTS_H_

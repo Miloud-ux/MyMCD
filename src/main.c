@@ -1,24 +1,6 @@
 #include "MCD_elements.h"
+#include "graphics.h"
 #include <ncurses.h>
-
-void drawEntity(Entity e) {
-    for (int row = e.y; row < e.y + e.height; row++) {
-        for (int col = e.x; col < e.x + e.width; col++) {
-            if ((row == e.y && col == e.x) ||
-                (row == e.y && col == e.x + e.width - 1) ||
-                (row == e.y + e.height - 1 && col == e.x) ||
-                (row == e.y + e.height - 1 && col == e.x + e.width - 1)) {
-                mvaddch(row, col, '+');
-            } else if (row == e.y || row == e.y + e.height - 1 ||
-                       row == e.y + 2) {
-                mvaddch(row, col, '-');
-            } else if (col == e.x || col == e.x + e.width - 1) {
-                mvaddch(row, col, '|');
-            }
-        }
-    }
-    mvprintw(e.y + 1, e.x + 2, "%s", e.name);
-}
 
 int main() {
     initscr();
@@ -29,13 +11,22 @@ int main() {
     timeout(16);
 
     Entity *student = createEntity("Student", 10, 5);
+    Entity *teacher = createEntity("Teacher", 10, 15);
     addProperty(student, "student_id", "int");
+    addProperty(student, "Adress", "string");
+    addProperty(student, "Phone_num", "str");
+    addProperty(student, "Wilaya", "str");
+    Relationship *r = addRelationship(40, 5, student, teacher, "Teach");
+    addCardinalityAPI("1,n,n,1", r);
+
     clear();
     printw("Simple MCD Tool - Press 'q' to quit");
 
     // Draw the entity
-    refresh();
-    drawEntity(*student);
+    drawEntity(student);
+    drawEntity(teacher);
+    drawRelationship(r);
+
     refresh();
 
     int ch;
