@@ -12,7 +12,7 @@ int main() {
     timeout(16);
 
     Entity *student = createEntity("Student", 10, 5);
-    Entity *teacher = createEntity("Teacher", 10, 15);
+    Entity *teacher = createEntity("Teacher", 70, 5);
     addProperty(student, "student_id", "int");
     addProperty(student, "Adress", "str");
     addProperty(student, "Phone_num", "str");
@@ -31,6 +31,7 @@ int main() {
     drawEntity(student);
     drawEntity(teacher);
     drawRelationship(r);
+    drawConnection(r);
 
     refresh();
 

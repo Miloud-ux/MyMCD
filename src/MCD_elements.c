@@ -3,6 +3,7 @@
 #include <string.h>
 
 Entity *createEntity(const char *name, int x, int y) {
+    int a = abs(3);
     Entity *e = malloc(sizeof(Entity));
     if (!e) {
         return NULL;
@@ -155,4 +156,41 @@ Relationship *addRelationship(int x, int y, Entity *e1, Entity *e2,
         r->cards[i] = NULL;
     }
     return r;
+}
+
+AttachPoint findBestAttachPoint(int box_x, int box_y, int box_width,
+                                int box_height, int target_x, int target_y) {
+    AttachPoint candidates[4];
+
+    candidates[0].x = box_x + box_width / 2;
+    candidates[0].y = box_y;
+    candidates[0].side = SIDE_TOP;
+
+    candidates[1].x = box_x + box_width / 2;
+    candidates[1].y = box_y + box_height - 1;
+    candidates[1].side = SIDE_BOTTOM;
+
+    candidates[2].x = box_x;
+    candidates[2].y = box_y + box_height / 2;
+    candidates[2].side = SIDE_LEFT;
+
+    candidates[3].x = box_x + box_width - 1;
+    candidates[3].y = box_y + box_height / 2;
+    candidates[3].side = SIDE_RIGHT;
+
+    int min_distance = 999999;
+    AttachPoint best = candidates[0];
+
+    for (int i = 0; i < 4; i++) {
+        int dx = abs(candidates[i].x - target_x);
+        int dy = abs(candidates[i].y - target_y);
+        int distance = dx + dy;
+
+        if (distance < min_distance) {
+            min_distance = distance;
+            best = candidates[i];
+        }
+    }
+
+    return best;
 }

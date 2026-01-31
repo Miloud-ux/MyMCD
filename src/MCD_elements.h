@@ -8,7 +8,6 @@
 
 #define ENTITY_HEIGHT 5
 #define ENTITY_WIDTH 18
-
 #define RELATIONSHIP_HEIGHT 5
 #define RELATIONSHIP_WIDTH 10
 
@@ -40,6 +39,19 @@ typedef struct {
         Cardinality *cards[2];
 } Relationship;
 
+typedef enum {
+    SIDE_TOP,
+    SIDE_BOTTOM,
+    SIDE_RIGHT,
+    SIDE_LEFT,
+} Side;
+
+typedef struct {
+        int x;
+        int y;
+        Side side;
+} AttachPoint;
+
 Entity *createEntity(const char *name, int x, int y);
 void addProperty(Entity *e, const char *prop_name, const char *prop_type);
 Relationship *addRelationship(int x, int y, Entity *e1, Entity *e2,
@@ -49,5 +61,7 @@ void tokenizeCardinalityInput(const char *input, char *card1, char *card2);
 void addCardinalityAPI(const char *input, Relationship *r);
 void addPropertyRelationship(Relationship *r, const char *prop_name,
                              const char *prop_type);
+AttachPoint findBestAttachPoint(int box_x, int box_y, int box_width,
+                                int box_height, int target_x, int target_y);
 
 #endif // SCR_MCD_ELEMENTS_H_
