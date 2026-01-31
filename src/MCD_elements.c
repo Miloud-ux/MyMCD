@@ -1,5 +1,4 @@
 #include "MCD_elements.h"
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -14,8 +13,8 @@ Entity *createEntity(const char *name, int x, int y) {
 
     e->x = x;
     e->y = y;
-    e->height = 10;
-    e->width = 22;
+    e->height = ENTITY_HEIGHT;
+    e->width = ENTITY_WIDTH;
     e->num_properties = 0;
 
     for (int i = 0; i < MAX_PROPERTIES; i++) {
@@ -41,6 +40,33 @@ void addProperty(Entity *e, const char *prop_name, const char *prop_type) {
     strncpy(p1->type, prop_type, MAX_TYPE_LEN - 1);
     e->properties[e->num_properties] = p1;
     e->num_properties += 1;
+    e->height += 1;
+    if ((int)strlen(p1->name) + ((int)strlen(p1->type)) > (e->width - 2)) {
+        e->width += strlen(p1->name) + strlen(p1->type);
+    }
+
+    // [ ] TODO:  Alert user that addition done
+}
+
+void addPropertyRelationship(Relationship *r, const char *prop_name,
+                             const char *prop_type) {
+    if (r->num_properties >= MAX_PROPERTIES) {
+        return;
+    }
+
+    Property *p1 = malloc(sizeof(Property));
+    if (p1 == NULL) {
+        return;
+    }
+
+    strncpy(p1->name, prop_name, MAX_NAME_LEN - 1);
+    strncpy(p1->type, prop_type, MAX_TYPE_LEN - 1);
+    r->properties[r->num_properties] = p1;
+    r->num_properties += 1;
+    r->height += 1;
+    if ((int)strlen(p1->name) + ((int)strlen(p1->type)) > (r->width - 2)) {
+        r->width += strlen(p1->name) + strlen(p1->type);
+    }
 
     // [ ] TODO:  Alert user that addition done
 }
@@ -113,8 +139,8 @@ Relationship *addRelationship(int x, int y, Entity *e1, Entity *e2,
     }
     r->x = x;
     r->y = y;
-    r->height = 10;
-    r->width = 22;
+    r->height = RELATIONSHIP_HEIGHT;
+    r->width = RELATIONSHIP_WIDTH;
     r->e1 = e1;
     r->e2 = e2;
     r->num_properties = 0;

@@ -6,6 +6,12 @@
 #define CARDINALITY_LEN 4
 #define MAX_PROPERTIES 20
 
+#define ENTITY_HEIGHT 5
+#define ENTITY_WIDTH 18
+
+#define RELATIONSHIP_HEIGHT 5
+#define RELATIONSHIP_WIDTH 10
+
 typedef struct {
         char name[MAX_NAME_LEN];
         char type[MAX_TYPE_LEN];
@@ -41,5 +47,7 @@ Relationship *addRelationship(int x, int y, Entity *e1, Entity *e2,
 void addCardinality(const char *input, Cardinality *c1, Cardinality *c2);
 void tokenizeCardinalityInput(const char *input, char *card1, char *card2);
 void addCardinalityAPI(const char *input, Relationship *r);
+void addPropertyRelationship(Relationship *r, const char *prop_name,
+                             const char *prop_type);
 
 #endif // SCR_MCD_ELEMENTS_H_

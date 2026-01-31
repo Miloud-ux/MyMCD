@@ -3,3 +3,4 @@
 
 void drawEntity(Entity *e);
 void drawRelationship(Relationship *r);
+void initColors();
