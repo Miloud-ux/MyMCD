@@ -1,8 +1,14 @@
 CC = gcc
-CFLAGS = -Wall -Wextra
+CFLAGS = -Wall -Wextra -Isrc -Isrc/DSA
 LIBS = -lncurses
 
-SRC = src/main.c src/MCD_elements.c src/graphics.c
+SRC = src/main.c \
+      src/MCD_elements.c \
+      src/graphics.c \
+      src/global_objects.c \
+      src/DSA/astar.c \
+      src/DSA/pqueue.c
+
 TARGET = main
 
 all: $(TARGET)
@@ -15,4 +21,5 @@ clean:
 
 run: $(TARGET)
 	./$(TARGET)
+
 

@@ -1,13 +1,37 @@
 #include "MCD_elements.h"
+#include "global_objects.h"
 #include <stdlib.h>
 #include <string.h>
 
+// Entity *createEntity(const char *name, int x, int y) {
+//     int a = abs(3);
+//     Entity *e = malloc(sizeof(Entity));
+//     if (!e) {
+//         return NULL;
+//     }
+//
+//     strncpy(e->name, name, MAX_NAME_LEN - 1);
+//     e->name[MAX_NAME_LEN - 1] = '\0';
+//
+//     e->x = x;
+//     e->y = y;
+//     e->height = ENTITY_HEIGHT;
+//     e->width = ENTITY_WIDTH;
+//     e->num_properties = 0;
+//
+//     for (int i = 0; i < MAX_PROPERTIES; i++) {
+//         e->properties[i] = NULL;
+//     }
+//
+//     // Alert user that creation done
+//
+//     return e;
+// }
+
 Entity *createEntity(const char *name, int x, int y) {
-    int a = abs(3);
     Entity *e = malloc(sizeof(Entity));
-    if (!e) {
+    if (!e)
         return NULL;
-    }
 
     strncpy(e->name, name, MAX_NAME_LEN - 1);
     e->name[MAX_NAME_LEN - 1] = '\0';
@@ -22,8 +46,7 @@ Entity *createEntity(const char *name, int x, int y) {
         e->properties[i] = NULL;
     }
 
-    // Alert user that creation done
-
+    register_entity(e);
     return e;
 }
 
@@ -130,14 +153,13 @@ void addCardinalityAPI(const char *input, Relationship *r) {
 
 Relationship *addRelationship(int x, int y, Entity *e1, Entity *e2,
                               const char *name) {
-    if (!e1 || !e2) {
+    if (!e1 || !e2)
         return NULL;
-    }
 
     Relationship *r = malloc(sizeof(Relationship));
-    if (!r) {
+    if (!r)
         return NULL;
-    }
+
     r->x = x;
     r->y = y;
     r->height = RELATIONSHIP_HEIGHT;
@@ -148,13 +170,14 @@ Relationship *addRelationship(int x, int y, Entity *e1, Entity *e2,
     strncpy(r->name, name, MAX_NAME_LEN - 1);
     r->name[MAX_NAME_LEN - 1] = '\0';
 
-    // Init with NULL
     for (int i = 0; i < MAX_PROPERTIES; i++) {
         r->properties[i] = NULL;
     }
     for (int i = 0; i < 2; i++) {
         r->cards[i] = NULL;
     }
+
+    register_relationship(r); // Register the relationship globally
     return r;
 }
 
