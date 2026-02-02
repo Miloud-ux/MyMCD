@@ -15,8 +15,8 @@ int main() {
 
     init_global_objects();
 
-    Entity *student = createEntity("Student", 10, 2);
-    Entity *teacher = createEntity("Teacher", 10, 14);
+    Entity *student = createEntity("Student", 10, 1);
+    Entity *teacher = createEntity("Teacher", 90, 10);
 
     addProperty(student, "student_id", "int");
     addProperty(student, "Adress", "str");
@@ -26,7 +26,7 @@ int main() {
     addProperty(teacher, "LICENCE", "str");
     addProperty(teacher, "SPECIALITY", "str");
 
-    Relationship *r = addRelationship(10, 15, student, teacher, "Teach");
+    Relationship *r = addRelationship(40, 20, student, teacher, "Teach");
     addPropertyRelationship(r, "Number_stu", "int");
     addPropertyRelationship(r, "Years_teaching", "int");
     addCardinalityAPI("1,n,n,1", r);

@@ -2,7 +2,7 @@
 #include "DSA/astar.h"
 #include "DSA/pqueue.h"
 #include <string.h>
-// Add this function to main.c for debugging
+
 void debugPrintPath(AStarPath *path, const char *name) {
     if (!path) {
         mvprintw(0, 0, "%s: No path found", name);
@@ -16,6 +16,7 @@ void debugPrintPath(AStarPath *path, const char *name) {
     refresh();
     getch();
 }
+
 void initColors() {
     start_color();
     init_pair(1, COLOR_RED, COLOR_BLACK);
@@ -119,12 +120,70 @@ void drawRelationship(Relationship *r) {
     attroff(COLOR_PAIR(2));
 }
 
-void drawAStarPath(AStarPath *path) {
+AStarPath *smooth_path(AStarPath *path) {
+    if (!path || path->length <= 2) {
+        AStarPath *new_path = malloc(sizeof(AStarPath));
+        new_path->length = path->length;
+        new_path->path_x = malloc(new_path->length * sizeof(int));
+        new_path->path_y = malloc(new_path->length * sizeof(int));
+        for (int i = 0; i < new_path->length; i++) {
+            new_path->path_x[i] = path->path_x[i];
+            new_path->path_y[i] = path->path_y[i];
+        }
+        return new_path;
+    }
+
+    AStarPath *smooth = malloc(sizeof(AStarPath));
+    smooth->path_x = malloc(path->length * sizeof(int));
+    smooth->path_y = malloc(path->length * sizeof(int));
+    smooth->length = 0;
+
+    smooth->path_x[0] = path->path_x[0];
+    smooth->path_y[0] = path->path_y[0];
+    smooth->length = 1;
+
+    for (int i = 1; i < path->length - 1; i++) {
+        int prev_x = path->path_x[i - 1];
+        int prev_y = path->path_y[i - 1];
+        int curr_x = path->path_x[i];
+        int curr_y = path->path_y[i];
+        int next_x = path->path_x[i + 1];
+        int next_y = path->path_y[i + 1];
+
+        int dir1_x = curr_x - prev_x;
+        int dir1_y = curr_y - prev_y;
+        int dir2_x = next_x - curr_x;
+        int dir2_y = next_y - curr_y;
+
+        if (dir1_x != dir2_x || dir1_y != dir2_y) {
+            smooth->path_x[smooth->length] = curr_x;
+            smooth->path_y[smooth->length] = curr_y;
+            smooth->length++;
+        }
+    }
+
+    smooth->path_x[smooth->length] = path->path_x[path->length - 1];
+    smooth->path_y[smooth->length] = path->path_y[path->length - 1];
+    smooth->length++;
+
+    smooth->path_x = realloc(smooth->path_x, smooth->length * sizeof(int));
+    smooth->path_y = realloc(smooth->path_y, smooth->length * sizeof(int));
+
+    return smooth;
+}
+
+void draw_path_with_corners(AStarPath *path) {
     if (!path || path->length < 2)
         return;
 
-    attron(COLOR_PAIR(6) | A_BOLD);
+    // Draw debug markers at each path point
+    for (int i = 0; i < path->length; i++) {
+        mvaddch(path->path_y[i], path->path_x[i], 'X');
+    }
+    refresh();
+    getch(); // Press any key to continue
 
+    attron(COLOR_PAIR(3));
     for (int i = 0; i < path->length - 1; i++) {
         int x1 = path->path_x[i];
         int y1 = path->path_y[i];
@@ -139,27 +198,38 @@ void drawAStarPath(AStarPath *path) {
     }
 
     for (int i = 1; i < path->length - 1; i++) {
-        int x = path->path_x[i];
-        int y = path->path_y[i];
         int prev_x = path->path_x[i - 1];
         int prev_y = path->path_y[i - 1];
+        int curr_x = path->path_x[i];
+        int curr_y = path->path_y[i];
         int next_x = path->path_x[i + 1];
         int next_y = path->path_y[i + 1];
 
-        if ((prev_x == x && next_y == y) || (prev_y == y && next_x == x)) {
-            if (prev_y < y && next_x > x) {
-                mvaddch(y, x, ACS_ULCORNER);
-            } else if (prev_y < y && next_x < x) {
-                mvaddch(y, x, ACS_LLCORNER);
-            } else if (prev_y > y && next_x > x) {
-                mvaddch(y, x, ACS_ULCORNER);
-            } else if (prev_y > y && next_x < x) {
-                mvaddch(y, x, ACS_LRCORNER);
-            }
+        int from_x = curr_x - prev_x;
+        int from_y = curr_y - prev_y;
+        int to_x = next_x - curr_x;
+        int to_y = next_y - curr_y;
+
+        if (from_x > 0 && to_y > 0) {
+            mvaddch(curr_y, curr_x, ACS_LRCORNER);
+        } else if (from_x > 0 && to_y < 0) {
+            mvaddch(curr_y, curr_x, ACS_LRCORNER);
+        } else if (from_x < 0 && to_y > 0) {
+            mvaddch(curr_y, curr_x, ACS_URCORNER);
+        } else if (from_x < 0 && to_y < 0) {
+            mvaddch(curr_y, curr_x, ACS_HLINE);
+        } else if (from_y > 0 && to_x > 0) {
+            mvaddch(curr_y, curr_x, ACS_LLCORNER);
+        } else if (from_y > 0 && to_x < 0) {
+            mvaddch(curr_y, curr_x, ACS_URCORNER);
+        } else if (from_y < 0 && to_x > 0) {
+            mvaddch(curr_y, curr_x, ACS_LRCORNER);
+        } else if (from_y < 0 && to_x < 0) {
+            mvaddch(curr_y, curr_x, ACS_LRCORNER);
         }
     }
 
-    attroff(COLOR_PAIR(6) | A_BOLD);
+    attroff(COLOR_PAIR(3));
 }
 
 void drawConnectionAStar(Relationship *r) {
@@ -175,78 +245,177 @@ void drawConnectionAStar(Relationship *r) {
     AttachPoint ap2 = findBestAttachPoint(r->e2->x, r->e2->y, r->e2->width,
                                           r->e2->height, r->x, r->y);
 
-    int margin = 8;
+    int start1_x = ap1.x;
+    int start1_y = ap1.y;
+    int end1_x = ap_rel_e1.x;
+    int end1_y = ap_rel_e1.y;
+    int start2_x = ap_rel_e2.x;
+    int start2_y = ap_rel_e2.y;
+    int end2_x = ap2.x;
+    int end2_y = ap2.y;
 
-    // ============================================================
-    // Path 1: Entity1 -> Relationship
-    // ============================================================
+    switch (ap1.side) {
+    case SIDE_LEFT:
+        start1_x--;
+        break;
+    case SIDE_RIGHT:
+        start1_x++;
+        break;
+    case SIDE_TOP:
+        start1_y--;
+        break;
+    case SIDE_BOTTOM:
+        start1_y++;
+        break;
+    }
+
+    switch (ap_rel_e1.side) {
+    case SIDE_LEFT:
+        end1_x--;
+        break;
+    case SIDE_RIGHT:
+        end1_x++;
+        break;
+    case SIDE_TOP:
+        end1_y--;
+        break;
+    case SIDE_BOTTOM:
+        end1_y++;
+        break;
+    }
+
+    switch (ap_rel_e2.side) {
+    case SIDE_LEFT:
+        start2_x--;
+        break;
+    case SIDE_RIGHT:
+        start2_x++;
+        break;
+    case SIDE_TOP:
+        start2_y--;
+        break;
+    case SIDE_BOTTOM:
+        start2_y++;
+        break;
+    }
+
+    switch (ap2.side) {
+    case SIDE_LEFT:
+        end2_x--;
+        break;
+    case SIDE_RIGHT:
+        end2_x++;
+        break;
+    case SIDE_TOP:
+        end2_y--;
+        break;
+    case SIDE_BOTTOM:
+        end2_y++;
+        break;
+    }
+
+    int margin = 10;
+
     AStarGrid *grid1 =
-        astar_create_grid(ap1.x, ap1.y, ap_rel_e1.x, ap_rel_e1.y, margin);
+        astar_create_grid(start1_x, start1_y, end1_x, end1_y, margin);
 
-    // Mark obstacles - DON'T mark e1 or r (we're connecting them!)
     for (int i = 0; i < global_objects.entity_count; i++) {
         Entity *e = global_objects.entities[i];
-        if (e && e != r->e1) { // ← DON'T mark Entity1!
+        if (e) {
             astar_mark_obstacle(grid1, e->x, e->y, e->width, e->height);
         }
     }
 
     for (int i = 0; i < global_objects.relationship_count; i++) {
         Relationship *rel = global_objects.relationships[i];
-        if (rel && rel != r) { // ← DON'T mark current relationship!
+        if (rel) {
             astar_mark_obstacle(grid1, rel->x, rel->y, rel->width, rel->height);
         }
     }
 
     AStarPath *path1 =
-        astar_find_path(grid1, ap1.x, ap1.y, ap_rel_e1.x, ap_rel_e1.y);
+        astar_find_path(grid1, start1_x, start1_y, end1_x, end1_y);
 
-    // debugPrintPath(path1, "Path E1->R");
-
-    // ============================================================
-    // Path 2: Relationship -> Entity2
-    // ============================================================
     AStarGrid *grid2 =
-        astar_create_grid(ap_rel_e2.x, ap_rel_e2.y, ap2.x, ap2.y, margin);
+        astar_create_grid(start2_x, start2_y, end2_x, end2_y, margin);
 
-    // Mark obstacles - DON'T mark r or e2 (we're connecting them!)
     for (int i = 0; i < global_objects.entity_count; i++) {
         Entity *e = global_objects.entities[i];
-        if (e && e != r->e2) { // ← DON'T mark Entity2!
+        if (e) {
             astar_mark_obstacle(grid2, e->x, e->y, e->width, e->height);
         }
     }
 
     for (int i = 0; i < global_objects.relationship_count; i++) {
         Relationship *rel = global_objects.relationships[i];
-        if (rel && rel != r) { // ← DON'T mark current relationship!
+        if (rel) {
             astar_mark_obstacle(grid2, rel->x, rel->y, rel->width, rel->height);
         }
     }
 
     AStarPath *path2 =
-        astar_find_path(grid2, ap_rel_e2.x, ap_rel_e2.y, ap2.x, ap2.y);
+        astar_find_path(grid2, start2_x, start2_y, end2_x, end2_y);
 
-    // debugPrintPath(path2, "Path R->E2");
-
-    // Draw the paths
     if (path1) {
-        drawAStarPath(path1);
+        AStarPath *smooth1 = smooth_path(path1);
+        draw_path_with_corners(smooth1);
+        astar_free_path(smooth1);
         astar_free_path(path1);
     }
 
     if (path2) {
-        drawAStarPath(path2);
+        AStarPath *smooth2 = smooth_path(path2);
+        draw_path_with_corners(smooth2);
+        astar_free_path(smooth2);
         astar_free_path(path2);
     }
 
-    // Draw cardinalities
     if (r->cards[0]) {
-        mvprintw(ap1.y, ap1.x - 4, "%s", r->cards[0]->value);
+        int card_x = ap1.x;
+        int card_y = ap1.y;
+
+        switch (ap1.side) {
+        case SIDE_TOP:
+            card_y -= 1;
+            card_x -= 2;
+            break;
+        case SIDE_BOTTOM:
+            card_y += 1;
+            card_x -= 2;
+            break;
+        case SIDE_LEFT:
+            card_x -= 5;
+            break;
+        case SIDE_RIGHT:
+            card_x += 2;
+            break;
+        }
+
+        mvprintw(card_y, card_x, "%s", r->cards[0]->value);
     }
 
     if (r->cards[1]) {
-        mvprintw(ap2.y, ap2.x - 4, "%s", r->cards[1]->value);
+        int card_x = ap2.x;
+        int card_y = ap2.y;
+
+        switch (ap2.side) {
+        case SIDE_TOP:
+            card_y -= 1;
+            card_x -= 2;
+            break;
+        case SIDE_BOTTOM:
+            card_y += 1;
+            card_x -= 2;
+            break;
+        case SIDE_LEFT:
+            card_x -= 5;
+            break;
+        case SIDE_RIGHT:
+            card_x += 2;
+            break;
+        }
+
+        mvprintw(card_y, card_x, "%s", r->cards[1]->value);
     }
 
     astar_free_grid(grid1);
