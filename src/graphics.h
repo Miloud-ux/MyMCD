@@ -15,5 +15,4 @@ void initColors();
 void debugPrintPath(AStarPath *path, const char *name);
 AStarPath *smooth_path(AStarPath *path);
 void draw_path_with_corners(AStarPath *path);
-
 #endif

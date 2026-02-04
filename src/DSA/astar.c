@@ -59,7 +59,6 @@ AStarGrid *astar_create_grid(int start_x, int start_y, int end_x, int end_y,
 }
 void astar_mark_obstacle(AStarGrid *grid, int box_x, int box_y, int width,
                          int height) {
-    // Mark the entire box as obstacle
     for (int y = box_y; y < box_y + height; y++) {
         for (int x = box_x; x < box_x + width; x++) {
             int grid_x = x - grid->offset_x;
@@ -138,7 +137,6 @@ AStarPath *astar_find_path(AStarGrid *grid, int start_x, int start_y, int end_x,
             int new_g_cost = current->g_cost + 1;
 
             if (new_g_cost < neighbor->g_cost || !neighbor->in_open_set) {
-
                 if (current->parent) {
                     int prev_dir_x = current->x - current->parent->x;
                     int prev_dir_y = current->y - current->parent->y;
@@ -148,7 +146,7 @@ AStarPath *astar_find_path(AStarGrid *grid, int start_x, int start_y, int end_x,
                     // If direction changes (not same vector), add penalty
                     if (!(prev_dir_x == curr_dir_x &&
                           prev_dir_y == curr_dir_y)) {
-                        new_g_cost += 5; // Turn penalty
+                        new_g_cost += 2; // Turn penalty
                     }
                 }
 
