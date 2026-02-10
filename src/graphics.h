@@ -15,4 +15,6 @@ void initColors();
 void debugPrintPath(AStarPath *path, const char *name);
 AStarPath *smooth_path(AStarPath *path);
 void draw_path_with_corners(AStarPath *path);
+WINDOW *create_console_window();
+void draw_console_prompt(WINDOW *console_win, const char *input);
 #endif

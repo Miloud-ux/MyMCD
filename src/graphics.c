@@ -372,17 +372,14 @@ void drawConnectionAStar(Relationship *r) {
         astar_find_path(grid1, start1_x, start1_y, end1_x, end1_y);
 
     if (path1) {
-        // [FIX]: Inject the actual border coordinates (ap1 and ap_rel_e1)
         add_endpoints_to_path(path1, ap1.x, ap1.y, ap_rel_e1.x, ap_rel_e1.y);
         draw_path_with_corners(path1);
         astar_free_path(path1);
     }
     astar_free_grid(grid1);
 
-    // --- PATH 2 (Rel -> Entity 2) ---
     AStarGrid *grid2 =
         astar_create_grid(start2_x, start2_y, end2_x, end2_y, margin);
-    // ... (Keep your obstacle marking loops) ...
     for (int i = 0; i < global_objects.entity_count; i++) {
         if (global_objects.entities[i])
             astar_mark_obstacle(grid2, global_objects.entities[i]->x,
@@ -415,3 +412,32 @@ void drawConnectionAStar(Relationship *r) {
 }
 
 void drawConnection(Relationship *r) { drawConnectionAStar(r); }
+
+// Command console
+
+WINDOW *create_console_window() {
+    int screen_height, screen_width;
+    getmaxyx(stdscr, screen_height, screen_width);
+
+    int console_height = 5;
+    int console_y = screen_height - console_height;
+
+    WINDOW *console_win = newwin(console_height, screen_width, console_y, 0);
+    box(console_win, 0, 0);
+    mvwprintw(console_win, 0, 2, " Console ");
+    return console_win;
+}
+
+void draw_console_prompt(WINDOW *console_win, const char *input) {
+    for (int y = 1; y < getmaxy(console_win) - 1; y++) {
+        wmove(console_win, y, 1);
+        wclrtoeol(console_win);
+    }
+
+    mvwprintw(console_win, 1, 1, ">> %s", input);
+
+    mvwprintw(console_win, getmaxy(console_win) - 2, 1,
+              "Press 'q' to quit | Type commands here");
+
+    wrefresh(console_win);
+}
