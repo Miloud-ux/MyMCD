@@ -1,32 +1,8 @@
 #include "MCD_elements.h"
 #include "global_objects.h"
+#include <ncurses.h>
 #include <stdlib.h>
 #include <string.h>
-
-// Entity *createEntity(const char *name, int x, int y) {
-//     int a = abs(3);
-//     Entity *e = malloc(sizeof(Entity));
-//     if (!e) {
-//         return NULL;
-//     }
-//
-//     strncpy(e->name, name, MAX_NAME_LEN - 1);
-//     e->name[MAX_NAME_LEN - 1] = '\0';
-//
-//     e->x = x;
-//     e->y = y;
-//     e->height = ENTITY_HEIGHT;
-//     e->width = ENTITY_WIDTH;
-//     e->num_properties = 0;
-//
-//     for (int i = 0; i < MAX_PROPERTIES; i++) {
-//         e->properties[i] = NULL;
-//     }
-//
-//     // Alert user that creation done
-//
-//     return e;
-// }
 
 Entity *createEntity(const char *name, int x, int y) {
     Entity *e = malloc(sizeof(Entity));
@@ -36,6 +12,15 @@ Entity *createEntity(const char *name, int x, int y) {
     strncpy(e->name, name, MAX_NAME_LEN - 1);
     e->name[MAX_NAME_LEN - 1] = '\0';
 
+    int screen_height, screen_width, console_height;
+    console_height = 8;
+    getmaxyx(stdscr, screen_height, screen_width);
+    if (y > screen_height - console_height) {
+        y -= (10 + ENTITY_HEIGHT);
+    }
+    if (x > screen_width) {
+        x -= ENTITY_WIDTH + 3;
+    }
     e->x = x;
     e->y = y;
     e->height = ENTITY_HEIGHT;
@@ -160,6 +145,15 @@ Relationship *addRelationship(int x, int y, Entity *e1, Entity *e2,
     if (!r)
         return NULL;
 
+    int screen_height, screen_width, console_height;
+    console_height = 8;
+    getmaxyx(stdscr, screen_height, screen_width);
+    if (y > screen_height - console_height) {
+        y -= (10 + RELATIONSHIP_HEIGHT);
+    }
+    if (x > screen_width) {
+        x -= RELATIONSHIP_WIDTH + 3;
+    }
     r->x = x;
     r->y = y;
     r->height = RELATIONSHIP_HEIGHT;
@@ -216,4 +210,13 @@ AttachPoint findBestAttachPoint(int box_x, int box_y, int box_width,
     }
 
     return best;
+}
+
+Entity *search_entity(const char *name) {
+    for (int i = 0; i < global_objects.entity_count; i++) {
+        if (strcasecmp(name, global_objects.entities[i]->name) == 0) {
+            return global_objects.entities[i];
+        }
+    }
+    return NULL;
 }
