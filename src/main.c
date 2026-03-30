@@ -14,10 +14,13 @@ int main() {
     initColors();
     timeout(16);
 
+    int screen_height, screen_width;
+    getmaxyx(stdscr, screen_height, screen_width);
+
     init_global_objects();
 
-    Entity *student = createEntity("Student", 10, 2);
-    Entity *teacher = createEntity("Teacher", 50, 18);
+    Entity *student = createEntity("Student", 3, 20);
+    Entity *teacher = createEntity("Teacher", 80, 18);
 
     addProperty(student, "student_id", "int");
     addProperty(student, "Adress", "str");
@@ -32,20 +35,13 @@ int main() {
     addPropertyRelationship(r, "Years_teaching", "int");
     addCardinalityAPI("1,n,n,1", r);
 
-    clear();
-    refresh();
-
     WINDOW *console_win = create_console_window();
     char input_buffer[256] = "";
     int input_len = 0;
+    bool moving = false;
 
-    printw("MCD Tool - Type 'help' for commands");
-
-    // drawEntity(student);
-    // drawEntity(teacher);
-    // drawRelationship(r);
-    // drawConnection(r);
-
+    draw_all_entities(global_objects, 0, moving);
+    draw_all_relationships(global_objects, 0, moving);
     draw_console_prompt(console_win, input_buffer);
     refresh();
 
@@ -54,25 +50,19 @@ int main() {
 
     while (is_running) {
         if (needs_redraw) {
-            move(0, 0);
-            clrtobot();
-
-            printw("MCD Tool - Type 'help' for commands");
-
-            for (int i = 0; i < global_objects.entity_count; i++) {
-                if (global_objects.entities[i]) {
-                    drawEntity(global_objects.entities[i]);
-                }
-            }
-
-            for (int i = 0; i < global_objects.relationship_count; i++) {
-                if (global_objects.relationships[i]) {
-                    drawRelationship(global_objects.relationships[i]);
-                    drawConnection(global_objects.relationships[i]);
-                }
-            }
+            erase();
+            mvprintw(0, screen_width / 2 - 10,
+                     "MCD Tool - Type 'help' for commands");
+            draw_all_entities(global_objects, 0, moving);
+            draw_all_relationships(global_objects, 0, moving);
 
             refresh();
+
+            // TODO : see which one is better for performance
+            // wnoutrefresh(stdscr);
+            // wnoutrefresh(console_win);
+            // doupdate();
+
             needs_redraw = false;
         }
 
@@ -102,9 +92,113 @@ int main() {
                 input_buffer[input_len++] = ch;
                 input_buffer[input_len] = '\0';
             }
+        } else if (ch == '\t') {
+            int entity_index = 0;
+            int relationship_index = 0;
+            moving = true;
+            bool switching_moving_type = true;
+
+            while (switching_moving_type) {
+                int moving_type = getch();
+                switch (moving_type) {
+                case 'e':
+                    while (moving) {
+                        int move_key = getch();
+                        if (entity_index >= global_objects.entity_count) {
+                            entity_index =
+                                global_objects.entity_count % entity_index;
+                        }
+                        if (relationship_index >=
+                            global_objects.relationship_count) {
+                            relationship_index =
+                                global_objects.relationship_count %
+                                relationship_index;
+                        }
+
+                        switch (move_key) {
+                        case KEY_UP:
+                            global_objects.entities[entity_index]->y -= 1;
+                            break;
+                        case KEY_DOWN:
+                            global_objects.entities[entity_index]->y += 1;
+                            break;
+                        case KEY_RIGHT:
+                            global_objects.entities[entity_index]->x += 1;
+                            break;
+                        case KEY_LEFT:
+                            global_objects.entities[entity_index]->x -= 1;
+                            break;
+                        case '\t':
+                            entity_index++;
+                            break;
+                        case 27:
+                            moving = false;
+                            break;
+                        }
+                        erase();
+                        draw_all_relationships(global_objects,
+                                               relationship_index, moving);
+                        draw_all_entities(global_objects, entity_index, moving);
+
+                        refresh();
+
+                        // TODO : see which one is better for peformance
+                        // wnoutrefresh(stdscr);
+                        // wnoutrefresh(console_win);
+                        // doupdate();
+                    }
+                    break;
+
+                case 'r':
+                    while (moving) {
+                        int move_key = getch();
+                        if (relationship_index >=
+                            global_objects.relationship_count) {
+                            relationship_index =
+                                global_objects.relationship_count %
+                                relationship_index;
+                        }
+
+                        switch (move_key) {
+                        case KEY_UP:
+                            global_objects.relationships[relationship_index]
+                                ->y -= 1;
+                            break;
+                        case KEY_DOWN:
+                            global_objects.relationships[relationship_index]
+                                ->y += 1;
+                            break;
+                        case KEY_RIGHT:
+                            global_objects.relationships[relationship_index]
+                                ->x += 1;
+                            break;
+                        case KEY_LEFT:
+                            global_objects.relationships[relationship_index]
+                                ->x -= 1;
+                            break;
+                        case '\t':
+                            relationship_index++;
+                            break;
+                        case 27:
+                            moving = false;
+                            break;
+                        }
+                        erase();
+                        draw_all_relationships(global_objects,
+                                               relationship_index, moving);
+                        refresh();
+                    }
+                    break;
+
+                case 'x':
+                    switching_moving_type = false;
+                    break;
+                }
+            }
+
+            needs_redraw = true;
         }
     }
-
     delwin(console_win);
     endwin();
     return 0;

@@ -8,7 +8,6 @@ SRC = src/main.c \
       src/global_objects.c \
       src/DSA/astar.c \
 	  src/parse_commands.c \
-	  src/parse_commands.h \
       src/DSA/pqueue.c
 
 TARGET = main

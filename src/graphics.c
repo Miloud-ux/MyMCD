@@ -59,7 +59,6 @@ void draw_vline_at(int x, int y1, int y2, chtype ch) {
 }
 
 void drawEntity(Entity *e) {
-    attron(COLOR_PAIR(7));
 
     mvaddch(e->y, e->x, ACS_ULCORNER);
     for (int i = 1; i < e->width - 1; i++) {
@@ -88,12 +87,9 @@ void drawEntity(Entity *e) {
             mvprintw(e->y + 2 + i, e->x + 1, "%-*s", e->width - 2, prop_str);
         }
     }
-
-    attroff(COLOR_PAIR(7));
 }
 
 void drawRelationship(Relationship *r) {
-    attron(COLOR_PAIR(5));
 
     mvaddch(r->y, r->x, ACS_ULCORNER);
     for (int i = 1; i < r->width - 1; i++) {
@@ -123,11 +119,7 @@ void drawRelationship(Relationship *r) {
             mvprintw(r->y + 2 + i, r->x + 1, "%-*s", r->width - 2, prop_str);
         }
     }
-
-    attroff(COLOR_PAIR(5));
 }
-// Adds the specific start and end coordinates to the path arrays
-// Adds the specific start and end coordinates to the path arrays
 void add_endpoints_to_path(AStarPath *path, int start_x, int start_y, int end_x,
                            int end_y) {
     if (!path)
@@ -161,59 +153,6 @@ void add_endpoints_to_path(AStarPath *path, int start_x, int start_y, int end_x,
     path->path_y = new_y;
     path->length = new_len;
 }
-
-// AStarPath *smooth_path(AStarPath *path) {
-//     if (!path || path->length <= 2) {
-//         AStarPath *new_path = malloc(sizeof(AStarPath));
-//         new_path->length = path->length;
-//         new_path->path_x = malloc(new_path->length * sizeof(int));
-//         new_path->path_y = malloc(new_path->length * sizeof(int));
-//         for (int i = 0; i < new_path->length; i++) {
-//             new_path->path_x[i] = path->path_x[i];
-//             new_path->path_y[i] = path->path_y[i];
-//         }
-//         return new_path;
-//     }
-//
-//     AStarPath *smooth = malloc(sizeof(AStarPath));
-//     smooth->path_x = malloc(path->length * sizeof(int));
-//     smooth->path_y = malloc(path->length * sizeof(int));
-//     smooth->length = 0;
-//
-//     smooth->path_x[0] = path->path_x[0];
-//     smooth->path_y[0] = path->path_y[0];
-//     smooth->length = 1;
-//
-//     for (int i = 1; i < path->length - 1; i++) {
-//         int prev_x = path->path_x[i - 1];
-//         int prev_y = path->path_y[i - 1];
-//         int curr_x = path->path_x[i];
-//         int curr_y = path->path_y[i];
-//         int next_x = path->path_x[i + 1];
-//         int next_y = path->path_y[i + 1];
-//
-//         int dir1_x = curr_x - prev_x;
-//         int dir1_y = curr_y - prev_y;
-//         int dir2_x = next_x - curr_x;
-//         int dir2_y = next_y - curr_y;
-//
-//         if (dir1_x != dir2_x || dir1_y != dir2_y) {
-//             smooth->path_x[smooth->length] = curr_x;
-//             smooth->path_y[smooth->length] = curr_y;
-//             smooth->length++;
-//         }
-//     }
-//
-//     smooth->path_x[smooth->length] = path->path_x[path->length - 1];
-//     smooth->path_y[smooth->length] = path->path_y[path->length - 1];
-//     smooth->length++;
-//
-//     smooth->path_x = realloc(smooth->path_x, smooth->length * sizeof(int));
-//     smooth->path_y = realloc(smooth->path_y, smooth->length * sizeof(int));
-//
-//     return smooth;
-// }
-
 void draw_path_with_corners(AStarPath *path) {
     if (!path || path->length < 2)
         return;
@@ -429,15 +368,51 @@ WINDOW *create_console_window() {
 }
 
 void draw_console_prompt(WINDOW *console_win, const char *input) {
-    for (int y = 1; y < getmaxy(console_win) - 1; y++) {
-        wmove(console_win, y, 1);
-        wclrtoeol(console_win);
-    }
+    int win_height = getmaxy(console_win);
 
-    mvwprintw(console_win, 1, 1, ">> %s", input);
+    wmove(console_win, win_height - 2, 1);
+    wclrtoeol(console_win);
 
-    mvwprintw(console_win, getmaxy(console_win) - 2, 1,
-              "Press 'q' to quit | Type commands here");
+    mvwprintw(console_win, win_height - 2, 1, ">> %s_", input);
+
+    box(console_win, 0, 0);
+    mvwprintw(console_win, 0, 2, " Console ");
 
     wrefresh(console_win);
+}
+
+void draw_all_entities(GlobalObjects global_objects, int moving_index,
+                       bool is_moving) {
+    for (int i = 0; i < global_objects.entity_count; i++) {
+        if (global_objects.entities[i]) {
+            if (is_moving && i == moving_index) {
+                attron(COLOR_PAIR(3));
+                drawEntity(global_objects.entities[i]);
+                attroff(COLOR_PAIR(3));
+            } else {
+                attron(COLOR_PAIR(7));
+                drawEntity(global_objects.entities[i]);
+                attroff(COLOR_PAIR(7));
+            }
+        }
+    }
+}
+
+void draw_all_relationships(GlobalObjects global_objects, int moving_index,
+                            bool is_moving) {
+    for (int i = 0; i < global_objects.relationship_count; i++) {
+        if (global_objects.relationships[i]) {
+            if (is_moving && moving_index == i) {
+                attron(COLOR_PAIR(7));
+                drawRelationship(global_objects.relationships[i]);
+                drawConnection(global_objects.relationships[i]);
+                attroff(COLOR_PAIR(7));
+            } else {
+                attron(COLOR_PAIR(5));
+                drawRelationship(global_objects.relationships[i]);
+                drawConnection(global_objects.relationships[i]);
+                attroff(COLOR_PAIR(5));
+            }
+        }
+    }
 }

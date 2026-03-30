@@ -30,7 +30,7 @@ typedef struct {
 
 typedef struct {
         int x, y;
-        int height, width; // currently it's rectangle TODO : make it oval
+        int height, width;
         char name[MAX_NAME_LEN];
         Entity *e1;
         Entity *e2;

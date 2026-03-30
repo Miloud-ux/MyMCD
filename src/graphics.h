@@ -17,4 +17,9 @@ AStarPath *smooth_path(AStarPath *path);
 void draw_path_with_corners(AStarPath *path);
 WINDOW *create_console_window();
 void draw_console_prompt(WINDOW *console_win, const char *input);
+void draw_all_entities(GlobalObjects global_objects, int moving_index,
+                       bool is_moving);
+void draw_all_relationships(GlobalObjects global_objects, int moving_index,
+                            bool is_moving);
+
 #endif

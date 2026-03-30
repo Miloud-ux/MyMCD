@@ -12,14 +12,26 @@ Entity *createEntity(const char *name, int x, int y) {
     strncpy(e->name, name, MAX_NAME_LEN - 1);
     e->name[MAX_NAME_LEN - 1] = '\0';
 
-    int screen_height, screen_width, console_height;
-    console_height = 8;
+    int screen_height, screen_width;
     getmaxyx(stdscr, screen_height, screen_width);
-    if (y > screen_height - console_height) {
-        y -= (10 + ENTITY_HEIGHT);
+
+    int console_height = 5;
+    int gap = 3;
+    int console_top_y = screen_height - console_height;
+
+    if (y + ENTITY_HEIGHT > console_top_y - gap) {
+        y = (console_top_y - gap) - ENTITY_HEIGHT;
     }
-    if (x > screen_width) {
-        x -= ENTITY_WIDTH + 3;
+    if (y < 1) {
+        y = 1;
+    }
+
+    int max_allowable_x = screen_width - ENTITY_WIDTH - gap;
+    if (x > max_allowable_x) {
+        x = max_allowable_x;
+    }
+    if (x < 1) {
+        x = 1;
     }
     e->x = x;
     e->y = y;
@@ -145,15 +157,31 @@ Relationship *addRelationship(int x, int y, Entity *e1, Entity *e2,
     if (!r)
         return NULL;
 
-    int screen_height, screen_width, console_height;
-    console_height = 8;
+    int screen_height, screen_width;
     getmaxyx(stdscr, screen_height, screen_width);
-    if (y > screen_height - console_height) {
-        y -= (10 + RELATIONSHIP_HEIGHT);
+
+    int console_height = 5;
+    int gap = 2;
+
+    int console_top_y = screen_height - console_height;
+
+    if (y + RELATIONSHIP_HEIGHT > console_top_y - gap) {
+        y = (console_top_y - gap) - RELATIONSHIP_HEIGHT;
     }
-    if (x > screen_width) {
-        x -= RELATIONSHIP_WIDTH + 3;
+
+    if (y < 0) {
+        y = 0;
     }
+
+    int max_x = screen_width - RELATIONSHIP_WIDTH - gap;
+    if (x > max_x) {
+        x = max_x;
+    }
+
+    if (x < 0) {
+        x = 0;
+    }
+
     r->x = x;
     r->y = y;
     r->height = RELATIONSHIP_HEIGHT;
@@ -171,7 +199,7 @@ Relationship *addRelationship(int x, int y, Entity *e1, Entity *e2,
         r->cards[i] = NULL;
     }
 
-    register_relationship(r); // Register the relationship globally
+    register_relationship(r);
     return r;
 }
 
