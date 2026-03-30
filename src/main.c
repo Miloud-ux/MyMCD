@@ -108,13 +108,6 @@ int main() {
                             entity_index =
                                 global_objects.entity_count % entity_index;
                         }
-                        if (relationship_index >=
-                            global_objects.relationship_count) {
-                            relationship_index =
-                                global_objects.relationship_count %
-                                relationship_index;
-                        }
-
                         switch (move_key) {
                         case KEY_UP:
                             global_objects.entities[entity_index]->y -= 1;
@@ -139,16 +132,11 @@ int main() {
                         draw_all_relationships(global_objects,
                                                relationship_index, moving);
                         draw_all_entities(global_objects, entity_index, moving);
-
                         refresh();
-
-                        // TODO : see which one is better for peformance
-                        // wnoutrefresh(stdscr);
-                        // wnoutrefresh(console_win);
-                        // doupdate();
                     }
-                    break;
 
+                    switching_moving_type = false;
+                    break;
                 case 'r':
                     while (moving) {
                         int move_key = getch();
@@ -158,7 +146,6 @@ int main() {
                                 global_objects.relationship_count %
                                 relationship_index;
                         }
-
                         switch (move_key) {
                         case KEY_UP:
                             global_objects.relationships[relationship_index]
@@ -184,10 +171,12 @@ int main() {
                             break;
                         }
                         erase();
+                        draw_all_entities(global_objects, entity_index, moving);
                         draw_all_relationships(global_objects,
                                                relationship_index, moving);
                         refresh();
                     }
+                    switching_moving_type = false;
                     break;
 
                 case 'x':
