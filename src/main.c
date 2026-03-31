@@ -12,7 +12,10 @@ int main() {
     keypad(stdscr, TRUE);
     nodelay(stdscr, TRUE);
     initColors();
-    timeout(16);
+    enum fps { SIXTY = 16, THIRTY = 33 };
+    enum fps current_fps = THIRTY;
+
+    timeout(current_fps);
 
     int screen_height, screen_width;
     getmaxyx(stdscr, screen_height, screen_width);
@@ -39,10 +42,12 @@ int main() {
     char input_buffer[256] = "";
     int input_len = 0;
     bool moving = false;
+    status status = Typing;
 
+    erase();
     draw_all_entities(global_objects, 0, moving);
     draw_all_relationships(global_objects, 0, moving);
-    draw_console_prompt(console_win, input_buffer);
+    draw_console_prompt(console_win, input_buffer, status);
     refresh();
 
     bool is_running = true;
@@ -55,18 +60,11 @@ int main() {
                      "MCD Tool - Type 'help' for commands");
             draw_all_entities(global_objects, 0, moving);
             draw_all_relationships(global_objects, 0, moving);
-
             refresh();
-
-            // TODO : see which one is better for performance
-            // wnoutrefresh(stdscr);
-            // wnoutrefresh(console_win);
-            // doupdate();
-
             needs_redraw = false;
         }
 
-        draw_console_prompt(console_win, input_buffer);
+        draw_console_prompt(console_win, input_buffer, status);
 
         int ch = getch();
 
@@ -92,14 +90,18 @@ int main() {
                 input_buffer[input_len++] = ch;
                 input_buffer[input_len] = '\0';
             }
+            // Editing mode
         } else if (ch == '\t') {
+            status = Editing;
             int entity_index = 0;
             int relationship_index = 0;
-            moving = true;
             bool switching_moving_type = true;
 
             while (switching_moving_type) {
                 int moving_type = getch();
+                bool moving_relationship = false;
+                bool moving_entity = false;
+                moving = true;
                 switch (moving_type) {
                 case 'e':
                     while (moving) {
@@ -130,12 +132,14 @@ int main() {
                         }
                         erase();
                         draw_all_relationships(global_objects,
-                                               relationship_index, moving);
+                                               relationship_index,
+                                               moving_relationship);
                         draw_all_entities(global_objects, entity_index, moving);
-                        refresh();
+                        wnoutrefresh(stdscr);
+                        draw_console_prompt(console_win, input_buffer, status);
+                        wnoutrefresh(console_win);
+                        doupdate();
                     }
-
-                    switching_moving_type = false;
                     break;
                 case 'r':
                     while (moving) {
@@ -171,21 +175,33 @@ int main() {
                             break;
                         }
                         erase();
-                        draw_all_entities(global_objects, entity_index, moving);
+                        draw_all_entities(global_objects, entity_index,
+                                          moving_entity);
                         draw_all_relationships(global_objects,
                                                relationship_index, moving);
-                        refresh();
+                        wnoutrefresh(stdscr);
+                        draw_console_prompt(console_win, input_buffer, status);
+                        wnoutrefresh(console_win);
+                        doupdate();
                     }
-                    switching_moving_type = false;
                     break;
 
                 case 'x':
                     switching_moving_type = false;
+                    status = Typing;
                     break;
                 }
-            }
 
-            needs_redraw = true;
+                erase();
+                draw_all_entities(global_objects, entity_index, moving_entity);
+                draw_all_relationships(global_objects, relationship_index,
+                                       moving_relationship);
+
+                wnoutrefresh(stdscr);
+                draw_console_prompt(console_win, input_buffer, status);
+                wnoutrefresh(console_win);
+                doupdate();
+            }
         }
     }
     delwin(console_win);

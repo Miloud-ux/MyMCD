@@ -19,10 +19,12 @@ void debugPrintPath(AStarPath *path, const char *name) {
 
 void initColors() {
     start_color();
+    // TODO : Should i use this ?
+    // use_default_colors();
     init_pair(1, COLOR_RED, COLOR_BLACK);
-    init_pair(4, COLOR_GREEN, COLOR_BLACK);
+    init_pair(2, COLOR_GREEN, COLOR_BLACK);
     init_pair(3, COLOR_YELLOW, COLOR_BLACK);
-    init_pair(4, COLOR_BLUE, COLOR_BLACK);
+    init_pair(4, COLOR_WHITE, COLOR_BLUE);
     init_pair(5, COLOR_MAGENTA, COLOR_BLACK);
     init_pair(6, COLOR_CYAN, COLOR_BLACK);
     init_pair(7, COLOR_WHITE, COLOR_BLACK);
@@ -367,17 +369,27 @@ WINDOW *create_console_window() {
     return console_win;
 }
 
-void draw_console_prompt(WINDOW *console_win, const char *input) {
+void draw_console_prompt(WINDOW *console_win, const char *input,
+                         status status) {
     int win_height = getmaxy(console_win);
 
     wmove(console_win, win_height - 2, 1);
     wclrtoeol(console_win);
 
     mvwprintw(console_win, win_height - 2, 1, ">> %s_", input);
+    int screen_width = getmaxx(console_win);
 
     box(console_win, 0, 0);
+    if (status == Typing) {
+        wattron(console_win, COLOR_PAIR(7));
+        mvwprintw(console_win, 0, screen_width - 9, " Typing ");
+        wattroff(console_win, COLOR_PAIR(7));
+    } else if (status == Editing) {
+        wattron(console_win, COLOR_PAIR(4));
+        mvwprintw(console_win, 0, screen_width - 9, " Editing ");
+        wattroff(console_win, COLOR_PAIR(4));
+    }
     mvwprintw(console_win, 0, 2, " Console ");
-
     wrefresh(console_win);
 }
 
@@ -403,10 +415,10 @@ void draw_all_relationships(GlobalObjects global_objects, int moving_index,
     for (int i = 0; i < global_objects.relationship_count; i++) {
         if (global_objects.relationships[i]) {
             if (is_moving && moving_index == i) {
-                attron(COLOR_PAIR(7));
+                attron(COLOR_PAIR(2));
                 drawRelationship(global_objects.relationships[i]);
                 drawConnection(global_objects.relationships[i]);
-                attroff(COLOR_PAIR(7));
+                attroff(COLOR_PAIR(2));
             } else {
                 attron(COLOR_PAIR(5));
                 drawRelationship(global_objects.relationships[i]);
