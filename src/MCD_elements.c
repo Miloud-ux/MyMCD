@@ -248,3 +248,12 @@ Entity *search_entity(const char *name) {
     }
     return NULL;
 }
+
+Relationship *search_relationship(const char *name) {
+    for (int i = 0; i < global_objects.relationship_count; i++) {
+        if (strcasecmp(name, global_objects.relationships[i]->name) == 0) {
+            return global_objects.relationships[i];
+        }
+    }
+    return NULL;
+}

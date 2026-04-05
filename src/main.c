@@ -1,7 +1,9 @@
+#include "Lexer/parse.h"
+#include "Lexer/tokenize.h"
 #include "MCD_elements.h"
+#include "command_processor.h"
 #include "global_objects.h"
 #include "graphics.h"
-#include "parse_commands.h"
 #include <ncurses.h>
 #include <string.h>
 
@@ -55,6 +57,7 @@ int main() {
 
     while (is_running) {
         if (needs_redraw) {
+            moving = false;
             erase();
             mvprintw(0, screen_width / 2 - 10,
                      "MCD Tool - Type 'help' for commands");

@@ -65,5 +65,6 @@ AttachPoint findBestAttachPoint(int box_x, int box_y, int box_width,
                                 int box_height, int target_x, int target_y);
 
 Entity *search_entity(const char *name);
+Relationship *search_relationship(const char *name);
 
 #endif // SCR_MCD_ELEMENTS_H_

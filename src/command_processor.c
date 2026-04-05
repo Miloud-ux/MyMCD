@@ -1,4 +1,4 @@
-#include "parse_commands.h"
+#include "command_processor.h"
 #include "MCD_elements.h"
 #include "global_objects.h"
 #include <ctype.h>
@@ -125,6 +125,27 @@ void execute_command(WINDOW *console_win, const char *input,
 
         show_message(console_win, "Cleared all");
         *needs_redraw = true;
+    } else if (strcmp(words[0], "add") == 0) {
+        if (strcmp(words[1], "property") == 0 && word_count >= 5) {
+            Entity *e = search_entity(words[4]);
+            Relationship *r = search_relationship(words[4]);
+
+            if (e != NULL) {
+                addProperty(e, words[2], words[3]);
+                *needs_redraw = true;
+            } else if (r != NULL) {
+                addPropertyRelationship(r, words[2], words[3]);
+                *needs_redraw = true;
+            } else {
+                show_message(console_win,
+                             "Property Or relationship doesn't exist");
+                return;
+            }
+        } else {
+            show_message(
+                console_win,
+                "Usage: add property <pname> <ptype> <entity>/<relationship");
+        }
     } else {
         char msg[128];
         snprintf(msg, sizeof(msg), "Unknown command: %s (type 'help')",

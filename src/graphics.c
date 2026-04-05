@@ -61,6 +61,7 @@ void draw_vline_at(int x, int y1, int y2, chtype ch) {
 }
 
 void drawEntity(Entity *e) {
+    // TODO : Reimplement this using vline and hline
 
     mvaddch(e->y, e->x, ACS_ULCORNER);
     for (int i = 1; i < e->width - 1; i++) {
@@ -71,6 +72,7 @@ void drawEntity(Entity *e) {
     for (int i = 1; i < e->height - 1; i++) {
         mvaddch(e->y + i, e->x, ACS_VLINE);
         mvprintw(e->y + i, e->x + 1, "%-*s", e->width - 2, "");
+        // why is this -2 ?  at least -1 ? does this affect A* ?
         mvaddch(e->y + i, e->x + e->width - 1, ACS_VLINE);
     }
 
@@ -80,13 +82,14 @@ void drawEntity(Entity *e) {
     }
     mvaddch(e->y + e->height - 1, e->x + e->width - 1, ACS_LRCORNER);
     mvprintw(e->y + 1, e->x + (e->width - strlen(e->name)) / 2, "%s", e->name);
+    draw_hline_at(e->y + 2, e->x + 1, e->x + e->width - 2, ACS_HLINE);
 
     for (int i = 0; i < e->num_properties; i++) {
         if (e->properties[i]) {
             char prop_str[64];
             snprintf(prop_str, sizeof(prop_str), "%s:%s",
                      e->properties[i]->name, e->properties[i]->type);
-            mvprintw(e->y + 2 + i, e->x + 1, "%-*s", e->width - 2, prop_str);
+            mvprintw(e->y + 3 + i, e->x + 1, "%-*s", e->width - 2, prop_str);
         }
     }
 }
@@ -112,13 +115,14 @@ void drawRelationship(Relationship *r) {
     mvaddch(r->y + r->height - 1, r->x + r->width - 1, ACS_LRCORNER);
 
     mvprintw(r->y + 1, r->x + (r->width - strlen(r->name)) / 2, "%s", r->name);
+    draw_hline_at(r->y + 2, r->x + 1, r->x + r->width - 2, ACS_HLINE);
 
     for (int i = 0; i < r->num_properties; i++) {
         if (r->properties[i]) {
             char prop_str[64];
             snprintf(prop_str, sizeof(prop_str), "%s:%s",
                      r->properties[i]->name, r->properties[i]->type);
-            mvprintw(r->y + 2 + i, r->x + 1, "%-*s", r->width - 2, prop_str);
+            mvprintw(r->y + 3 + i, r->x + 1, "%-*s", r->width - 2, prop_str);
         }
     }
 }
@@ -381,13 +385,13 @@ void draw_console_prompt(WINDOW *console_win, const char *input,
 
     box(console_win, 0, 0);
     if (status == Typing) {
-        wattron(console_win, COLOR_PAIR(7));
+        wattron(console_win, COLOR_PAIR(7) | A_BOLD);
         mvwprintw(console_win, 0, screen_width - 9, " Typing ");
-        wattroff(console_win, COLOR_PAIR(7));
+        wattroff(console_win, COLOR_PAIR(7) | A_BOLD);
     } else if (status == Editing) {
-        wattron(console_win, COLOR_PAIR(4));
+        wattron(console_win, COLOR_PAIR(4) | A_BOLD);
         mvwprintw(console_win, 0, screen_width - 9, " Editing ");
-        wattroff(console_win, COLOR_PAIR(4));
+        wattroff(console_win, COLOR_PAIR(4) | A_BOLD);
     }
     mvwprintw(console_win, 0, 2, " Console ");
     wrefresh(console_win);
