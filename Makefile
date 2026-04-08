@@ -7,9 +7,9 @@ SRC = src/main.c \
       src/graphics.c \
       src/global_objects.c \
       src/DSA/astar.c \
-	  src/command_processor.c \
       src/Lexer/parse.c \
       src/Lexer/tokenize.c \
+	  src/command_processor.c \
       src/DSA/pqueue.c
 
 TARGET = main

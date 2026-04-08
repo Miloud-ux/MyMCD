@@ -23,5 +23,6 @@ typedef struct {
 void tokenize_content(const char *content, Token tokens[], int *count);
 const char *skip_whitespace(const char *p, const char *content);
 Token get_next_token(Token *tokens, int *current, int count);
-
+void advance_token(int *current);
+Token peek_token(Token *tokens, int current);
 #endif //

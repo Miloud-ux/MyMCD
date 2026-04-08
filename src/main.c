@@ -80,7 +80,7 @@ int main() {
                 strcmp(input_buffer, "quit") == 0) {
                 is_running = false;
             } else {
-                execute_command(console_win, input_buffer, &needs_redraw);
+                da_execute(console_win, input_buffer, &needs_redraw);
             }
             input_len = 0;
             input_buffer[0] = '\0';

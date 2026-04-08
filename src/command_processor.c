@@ -1,6 +1,9 @@
 #include "command_processor.h"
+#include "Lexer/parse.h"
+#include "Lexer/tokenize.h"
 #include "MCD_elements.h"
 #include "global_objects.h"
+#include <assert.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,6 +24,16 @@ void show_message(WINDOW *console_win, const char *msg) {
     box(console_win, 0, 0);
     mvwprintw(console_win, 0, 2, " Console ");
     wrefresh(console_win);
+}
+
+void da_execute(WINDOW *console_win, const char *input, bool *needs_redraw) {
+    Parser *p = malloc(sizeof(Parser));
+    assert(p != NULL);
+    init_parser(p);
+    tokenize_content(input, p->tokens, &p->count);
+    parse_command(p, input, console_win);
+    *needs_redraw = true;
+    free(p);
 }
 
 void execute_command(WINDOW *console_win, const char *input,

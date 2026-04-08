@@ -19,7 +19,7 @@ void debugPrintPath(AStarPath *path, const char *name) {
 
 void initColors() {
     start_color();
-    // TODO : Should i use this ?
+    // TODO : research this func for terminals that don't support colors
     // use_default_colors();
     init_pair(1, COLOR_RED, COLOR_BLACK);
     init_pair(2, COLOR_GREEN, COLOR_BLACK);
@@ -136,23 +136,23 @@ void add_endpoints_to_path(AStarPath *path, int start_x, int start_y, int end_x,
     int *new_y = malloc(new_len * sizeof(int));
 
     if (!new_x || !new_y)
-        return; // Safety check
+        return;
 
-    // 1. Prepend the actual Start (Border Point)
+    // start points (Border Point)
     new_x[0] = start_x;
     new_y[0] = start_y;
 
-    // 2. Copy the existing A* path
+    // copy the existing A* path
     for (int i = 0; i < path->length; i++) {
         new_x[i + 1] = path->path_x[i];
         new_y[i + 1] = path->path_y[i];
     }
 
-    // 3. Append the actual End (Border Point)
+    // append the actual End (Border Point)
     new_x[new_len - 1] = end_x;
     new_y[new_len - 1] = end_y;
 
-    // 4. Replace the old arrays
+    // replace the old arrays
     free(path->path_x);
     free(path->path_y);
     path->path_x = new_x;
@@ -165,7 +165,7 @@ void draw_path_with_corners(AStarPath *path) {
 
     attron(COLOR_PAIR(3));
 
-    // PASS 1: Draw the straight lines first
+    //  draw the straight lines first
     for (int i = 0; i < path->length - 1; i++) {
         int x1 = path->path_x[i];
         int y1 = path->path_y[i];
@@ -179,7 +179,7 @@ void draw_path_with_corners(AStarPath *path) {
         }
     }
 
-    // PASS 2: Draw corners on top of the joints
+    // draw corners on top of the joints
     for (int i = 1; i < path->length - 1; i++) {
         int prev_x = path->path_x[i - 1];
         int prev_y = path->path_y[i - 1];
@@ -188,7 +188,7 @@ void draw_path_with_corners(AStarPath *path) {
         int next_x = path->path_x[i + 1];
         int next_y = path->path_y[i + 1];
 
-        // 1. Check Connectivity (Booleans are easier than vector math)
+        //  check donnectivity
         // We look at the Previous and Next nodes to see where the neighbors
         // are.
         bool has_up = (prev_y < curr_y) || (next_y < curr_y);
@@ -196,7 +196,7 @@ void draw_path_with_corners(AStarPath *path) {
         bool has_left = (prev_x < curr_x) || (next_x < curr_x);
         bool has_right = (prev_x > curr_x) || (next_x > curr_x);
 
-        // 2. Select Character based on Neighbors
+        // select character based on Neighbors
         if (has_down && has_right) {
             mvaddch(curr_y, curr_x, ACS_ULCORNER); // ┌
         } else if (has_down && has_left) {
@@ -215,7 +215,6 @@ void drawConnectionAStar(Relationship *r) {
     if (!r || !r->e1 || !r->e2)
         return;
 
-    // --- (Keep your existing AttachPoint calculation logic exactly as is) ---
     AttachPoint ap1 = findBestAttachPoint(r->e1->x, r->e1->y, r->e1->width,
                                           r->e1->height, r->x, r->y);
     AttachPoint ap_rel_e1 = findBestAttachPoint(r->x, r->y, r->width, r->height,
@@ -234,7 +233,6 @@ void drawConnectionAStar(Relationship *r) {
     int end2_x = ap2.x;
     int end2_y = ap2.y;
 
-    // --- (Keep your Switch Statements for shifting logic exactly as is) ---
     switch (ap1.side) {
     case SIDE_LEFT:
         start1_x--;
@@ -294,10 +292,10 @@ void drawConnectionAStar(Relationship *r) {
 
     int margin = 10;
 
-    // --- PATH 1 (Entity 1 -> Rel) ---
+    // path 1: entity1 --> relationship
     AStarGrid *grid1 =
         astar_create_grid(start1_x, start1_y, end1_x, end1_y, margin);
-    // ... (Keep your obstacle marking loops) ...
+    // obstacle marking
     for (int i = 0; i < global_objects.entity_count; i++) {
         if (global_objects.entities[i])
             astar_mark_obstacle(grid1, global_objects.entities[i]->x,
@@ -344,7 +342,7 @@ void drawConnectionAStar(Relationship *r) {
         astar_find_path(grid2, start2_x, start2_y, end2_x, end2_y);
 
     if (path2) {
-        // [FIX]: Inject the actual border coordinates (ap_rel_e2 and ap2)
+        // inject the actual border coordinates (ap_rel_e2 and ap2)
         add_endpoints_to_path(path2, ap_rel_e2.x, ap_rel_e2.y, ap2.x, ap2.y);
         draw_path_with_corners(path2);
         astar_free_path(path2);
@@ -358,7 +356,7 @@ void drawConnectionAStar(Relationship *r) {
 
 void drawConnection(Relationship *r) { drawConnectionAStar(r); }
 
-// Command console
+// ==Command console==
 
 WINDOW *create_console_window() {
     int screen_height, screen_width;

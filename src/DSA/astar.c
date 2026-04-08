@@ -6,11 +6,11 @@ static int heuristic(int x1, int y1, int x2, int y2) {
     return abs(x1 - x2) + abs(y1 - y2);
 }
 static AStarNode *get_node(AStarGrid *grid, int x, int y) {
-    // Convert screen coords to grid coords
+    // convert screen coords to grid coords
     int grid_x = x - grid->offset_x;
     int grid_y = y - grid->offset_y;
 
-    // Check bounds
+    // check bounds
     if (grid_x < 0 || grid_x >= grid->width || grid_y < 0 ||
         grid_y >= grid->height) {
         return NULL;
@@ -143,10 +143,11 @@ AStarPath *astar_find_path(AStarGrid *grid, int start_x, int start_y, int end_x,
                     int curr_dir_x = neighbor->x - current->x;
                     int curr_dir_y = neighbor->y - current->y;
 
-                    // If direction changes (not same vector), add penalty
+                    // if direction changes (turn detected) add penalty
                     if (!(prev_dir_x == curr_dir_x &&
                           prev_dir_y == curr_dir_y)) {
-                        new_g_cost += 2; // Turn penalty
+                        new_g_cost +=
+                            2; // Turn penalty to reduce staircase effect
                     }
                 }
 

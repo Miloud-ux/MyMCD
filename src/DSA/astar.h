@@ -36,4 +36,4 @@ void astar_free_grid(AStarGrid *grid);
 
 void astar_free_path(AStarPath *path);
 
-#endif // !DEBUG
+#endif

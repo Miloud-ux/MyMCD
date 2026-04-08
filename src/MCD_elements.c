@@ -65,8 +65,6 @@ void addProperty(Entity *e, const char *prop_name, const char *prop_type) {
     if ((int)strlen(p1->name) + ((int)strlen(p1->type)) > (e->width - 2)) {
         e->width += strlen(p1->name) + strlen(p1->type);
     }
-
-    // [ ] TODO:  Alert user that addition done
 }
 
 void addPropertyRelationship(Relationship *r, const char *prop_name,
@@ -88,8 +86,6 @@ void addPropertyRelationship(Relationship *r, const char *prop_name,
     if ((int)strlen(p1->name) + ((int)strlen(p1->type)) > (r->width - 2)) {
         r->width += strlen(p1->name) + strlen(p1->type);
     }
-
-    // [ ] TODO:  Alert user that addition done
 }
 
 void tokenizeCardinalityInput(const char *input, char *card1, char *card2) {

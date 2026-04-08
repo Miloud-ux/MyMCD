@@ -1,4 +1,5 @@
 #include "tokenize.h"
+#include "parse.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
@@ -35,6 +36,8 @@ void tokenize_content(const char *content, Token tokens[], int *count) {
             while (*p != '\0' && *p != '"' && len < 63) {
                 tokens[*count].value[len++] = *p++;
             }
+            if (*p == '"')
+                p++;
             tokens[*count].pos = (int)(p - content);
             tokens[*count].length = len;
             tokens[*count].value[len] = '\0';
@@ -79,3 +82,6 @@ Token get_next_token(Token *tokens, int *current, int count) {
     }
     return (Token){.type = TOKEN_EOF, .value[0] = '\0', .length = 1};
 }
+
+void advance_token(int *current) { *current += 1; }
+Token peek_token(Token *tokens, int current) { return tokens[current]; }
