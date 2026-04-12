@@ -1,0 +1,146 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-c",
+      "-Wall",
+      "-Wextra",
+      "-Isrc",
+      "-Isrc/DSA",
+      "-o",
+      "main",
+      "src/main.c"
+    ],
+    "directory": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram",
+    "file": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/src/main.c",
+    "output": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/main"
+  },
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-c",
+      "-Wall",
+      "-Wextra",
+      "-Isrc",
+      "-Isrc/DSA",
+      "-o",
+      "main",
+      "src/MCD_elements.c"
+    ],
+    "directory": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram",
+    "file": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/src/MCD_elements.c",
+    "output": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/main"
+  },
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-c",
+      "-Wall",
+      "-Wextra",
+      "-Isrc",
+      "-Isrc/DSA",
+      "-o",
+      "main",
+      "src/graphics.c"
+    ],
+    "directory": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram",
+    "file": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/src/graphics.c",
+    "output": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/main"
+  },
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-c",
+      "-Wall",
+      "-Wextra",
+      "-Isrc",
+      "-Isrc/DSA",
+      "-o",
+      "main",
+      "src/global_objects.c"
+    ],
+    "directory": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram",
+    "file": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/src/global_objects.c",
+    "output": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/main"
+  },
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-c",
+      "-Wall",
+      "-Wextra",
+      "-Isrc",
+      "-Isrc/DSA",
+      "-o",
+      "main",
+      "src/DSA/astar.c"
+    ],
+    "directory": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram",
+    "file": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/src/DSA/astar.c",
+    "output": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/main"
+  },
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-c",
+      "-Wall",
+      "-Wextra",
+      "-Isrc",
+      "-Isrc/DSA",
+      "-o",
+      "main",
+      "src/Lexer/parse.c"
+    ],
+    "directory": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram",
+    "file": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/src/Lexer/parse.c",
+    "output": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/main"
+  },
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-c",
+      "-Wall",
+      "-Wextra",
+      "-Isrc",
+      "-Isrc/DSA",
+      "-o",
+      "main",
+      "src/Lexer/tokenize.c"
+    ],
+    "directory": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram",
+    "file": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/src/Lexer/tokenize.c",
+    "output": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/main"
+  },
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-c",
+      "-Wall",
+      "-Wextra",
+      "-Isrc",
+      "-Isrc/DSA",
+      "-o",
+      "main",
+      "src/command_processor.c"
+    ],
+    "directory": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram",
+    "file": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/src/command_processor.c",
+    "output": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/main"
+  },
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-c",
+      "-Wall",
+      "-Wextra",
+      "-Isrc",
+      "-Isrc/DSA",
+      "-o",
+      "main",
+      "src/DSA/pqueue.c"
+    ],
+    "directory": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram",
+    "file": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/src/DSA/pqueue.c",
+    "output": "/home/usr/programming/c_leetcode_and_projects/CLI-tool-for-MCD-diagram/main"
+  }
+]
