@@ -8,6 +8,7 @@ typedef struct {
         Token tokens[64];
         int count;
         int current;
+        const char *userInput;
 } Parser;
 
 typedef struct {
@@ -30,11 +31,11 @@ typedef struct {
         } Data;
 } CreateCommand;
 
-void init_parser(Parser *p);
+void init_parser(Parser *p, const char *content);
 void parse_command(Parser *p, const char *content, WINDOW *console_win);
 // maybe in future implementation of error msg function we can add a simple
 // guess 'did you mean this "TOKEN"' then we have to pass the current token
-void error_msg(WINDOW *console_win, int pos, const char *error);
+void error_msg(WINDOW *console_win, Parser *p, const char *error);
 bool parse_create(Parser *p, WINDOW *console, CreateCommand *c);
 bool parse_create_entity(WINDOW *console, Parser *p, bool is_called, CreateCommand *c);
 bool parse_create_relationship(WINDOW *console, Parser *p, CreateCommand *c);

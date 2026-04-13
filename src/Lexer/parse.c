@@ -5,22 +5,58 @@
 #include <stdio.h>
 #include <string.h>
 
-void init_parser(Parser *p) {
+void init_parser(Parser *p, const char *content) {
     if (!p) {
         return;
     }
     p->current = 0;
     p->count = 0;
+    p->userInput = content;
 }
 
-void error_msg(WINDOW *console_win, int pos, const char *error) { show_message(console_win, error); }
+void error_msg(WINDOW *console_win, Parser *p, const char *error) {
+    int idx = p->current;
+    if (idx >= p->count)
+        idx = p->count - 1;
+    if (idx < 0)
+        idx = 0;
+
+    wmove(console_win, 1, 1);
+    wclrtoeol(console_win);
+
+    wmove(console_win, 2, 1);
+    wclrtoeol(console_win);
+
+    wmove(console_win, 3, 1);
+    wclrtoeol(console_win);
+
+    wattron(console_win, COLOR_PAIR(1));
+    mvwprintw(console_win, 1, 1, "[SYNTAX ERROR]: ");
+    wattroff(console_win, COLOR_PAIR(1));
+    mvwprintw(console_win, 1, 17, "%s", error);
+
+    // Adding one for the carret since it's pointing to the last valid
+    // token instead of pointing to the faulty token and getting an error
+    mvwprintw(console_win, 2, 1, "> %s", p->userInput);
+    for (int i = 0; i < p->tokens[idx].pos + 2; i++) {
+        mvwaddch(console_win, 3, 2 + i, ' ');
+    }
+    wattron(console_win, COLOR_PAIR(1));
+    mvwaddch(console_win, 3, 4 + p->tokens[idx].pos, '^');
+    for (int i = 0; i < p->tokens[idx].length; i++) {
+        mvwaddch(console_win, 3, 5 + p->tokens[idx].pos + i, '~');
+    }
+    wattroff(console_win, COLOR_PAIR(1));
+
+    wrefresh(console_win);
+}
 
 void parse_command(Parser *p, const char *content, WINDOW *console_win) {
     // Root function that calls other child functions
     if (!content) {
         return;
     }
-    init_parser(p);
+    init_parser(p, content);
     tokenize_content(content, p->tokens, &p->count);
 
     while (p->current < p->count) {
@@ -49,7 +85,7 @@ void parse_command(Parser *p, const char *content, WINDOW *console_win) {
             // show_message(console_win, debug_msg);
 
             const char *error = "Unknown command try : {create, help,clear}";
-            error_msg(console_win, p->tokens[p->current].pos, error);
+            error_msg(console_win, p, error);
             return;
         }
     }
@@ -67,8 +103,8 @@ bool parse_create(Parser *p, WINDOW *console, CreateCommand *c) {
             return true;
     } else {
         // Error expected : entity or relationship
-        const char *error = "Syntax Error : expected either Entity or relationship";
-        error_msg(console, p->current, error);
+        const char *error = "expected either Entity or relationship";
+        error_msg(console, p, error);
     }
     return false;
 }
@@ -87,13 +123,12 @@ bool parse_create_entity(WINDOW *console, Parser *p, bool is_called, CreateComma
         c->Data.e.name[MAX_NAME_LEN - 1] = '\0';
         return true;
     } else {
-        const char *error = "Syntax Error : expected entity name";
-        error_msg(console, p->current, error);
+        const char *error = "expected entity name";
+        error_msg(console, p, error);
     }
     return false;
 }
 // TODO : Add cardinality tokenization
-// create relationship "job" "employee" "company"
 
 bool parse_create_relationship(WINDOW *console, Parser *p, CreateCommand *c) {
     Token t = peek_token(p->tokens, p->current);
@@ -119,7 +154,6 @@ bool parse_create_relationship(WINDOW *console, Parser *p, CreateCommand *c) {
         }
 
         // Both are succesful so we create the relationship
-
         strncpy(e2_name, c->Data.e.name, MAX_NAME_LEN);
         e2_name[MAX_NAME_LEN - 1] = '\0';
         advance_token(&p->current);
@@ -136,8 +170,8 @@ bool parse_create_relationship(WINDOW *console, Parser *p, CreateCommand *c) {
 
         return true;
     } else {
-        const char *error = "Syntax Error : expected Relationhip name";
-        error_msg(console, p->current, error);
+        const char *error = "expected Relationhip name";
+        error_msg(console, p, error);
     }
     return false;
 }

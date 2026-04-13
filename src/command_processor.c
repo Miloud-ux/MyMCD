@@ -15,29 +15,26 @@ static void to_lowercase(char *str) {
 }
 
 void show_message(WINDOW *console_win, const char *msg) {
-    int win_height = getmaxy(console_win);
-
     wmove(console_win, 1, 1);
     wclrtoeol(console_win);
     mvwprintw(console_win, 1, 1, ">> %s", msg);
-
-    box(console_win, 0, 0);
-    mvwprintw(console_win, 0, 2, " Console ");
+    // not needed but keep just in case
+    // box(console_win, 0, 0);
+    // mvwprintw(console_win, 0, 2, " Console ");
     wrefresh(console_win);
 }
 
 void da_execute(WINDOW *console_win, const char *input, bool *needs_redraw) {
     Parser *p = malloc(sizeof(Parser));
     assert(p != NULL);
-    init_parser(p);
+    init_parser(p, input);
     tokenize_content(input, p->tokens, &p->count);
     parse_command(p, input, console_win);
     *needs_redraw = true;
     free(p);
 }
 
-void execute_command(WINDOW *console_win, const char *input,
-                     bool *needs_redraw) {
+void execute_command(WINDOW *console_win, const char *input, bool *needs_redraw) {
     if (strlen(input) == 0) {
         return;
     }
@@ -77,8 +74,7 @@ void execute_command(WINDOW *console_win, const char *input,
             Entity *new_entity = createEntity(name, x, y);
 
             char msg[128];
-            snprintf(msg, sizeof(msg), "Created entity '%s' at (%d,%d)", name,
-                     x, y);
+            snprintf(msg, sizeof(msg), "Created entity '%s' at (%d,%d)", name, x, y);
             show_message(console_win, msg);
 
             *needs_redraw = true;
@@ -88,10 +84,8 @@ void execute_command(WINDOW *console_win, const char *input,
             char *second_entity = words[4];
 
             for (int i = 0; i < global_objects.relationship_count; i++) {
-                if (strcasecmp(global_objects.relationships[i]->name, name) ==
-                    0) {
-                    show_message(console_win,
-                                 "Error: Relationship already exists!");
+                if (strcasecmp(global_objects.relationships[i]->name, name) == 0) {
+                    show_message(console_win, "Error: Relationship already exists!");
                     return;
                 }
             }
@@ -100,8 +94,7 @@ void execute_command(WINDOW *console_win, const char *input,
             Entity *e2 = search_entity(second_entity);
 
             if (!e1 || !e2) {
-                show_message(console_win,
-                             "Error: One or both entities not found");
+                show_message(console_win, "Error: One or both entities not found");
                 return;
             }
 
@@ -116,9 +109,8 @@ void execute_command(WINDOW *console_win, const char *input,
 
             *needs_redraw = true;
         } else {
-            show_message(console_win,
-                         "Usage: create entity <name> OR create relationship "
-                         "<name> <entity1> <entity2>");
+            show_message(console_win, "Usage: create entity <name> OR create relationship "
+                                      "<name> <entity1> <entity2>");
         }
     } else if (strcmp(words[0], "help") == 0) {
         show_message(console_win, "Commands: create entity <name>, create "
@@ -150,19 +142,15 @@ void execute_command(WINDOW *console_win, const char *input,
                 addPropertyRelationship(r, words[2], words[3]);
                 *needs_redraw = true;
             } else {
-                show_message(console_win,
-                             "Property Or relationship doesn't exist");
+                show_message(console_win, "Property Or relationship doesn't exist");
                 return;
             }
         } else {
-            show_message(
-                console_win,
-                "Usage: add property <pname> <ptype> <entity>/<relationship");
+            show_message(console_win, "Usage: add property <pname> <ptype> <entity>/<relationship");
         }
     } else {
         char msg[128];
-        snprintf(msg, sizeof(msg), "Unknown command: %s (type 'help')",
-                 words[0]);
+        snprintf(msg, sizeof(msg), "Unknown command: %s (type 'help')", words[0]);
         show_message(console_win, msg);
     }
 }

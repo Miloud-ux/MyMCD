@@ -9,8 +9,7 @@ void debugPrintPath(AStarPath *path, const char *name) {
     } else {
         mvprintw(0, 0, "%s: Path length %d", name, path->length);
         for (int i = 0; i < path->length; i++) {
-            mvprintw(1 + i, 0, "  [%d] = (%d, %d)", i, path->path_x[i],
-                     path->path_y[i]);
+            mvprintw(1 + i, 0, "  [%d] = (%d, %d)", i, path->path_x[i], path->path_y[i]);
         }
     }
     refresh();
@@ -87,8 +86,7 @@ void drawEntity(Entity *e) {
     for (int i = 0; i < e->num_properties; i++) {
         if (e->properties[i]) {
             char prop_str[64];
-            snprintf(prop_str, sizeof(prop_str), "%s:%s",
-                     e->properties[i]->name, e->properties[i]->type);
+            snprintf(prop_str, sizeof(prop_str), "%s:%s", e->properties[i]->name, e->properties[i]->type);
             mvprintw(e->y + 3 + i, e->x + 1, "%-*s", e->width - 2, prop_str);
         }
     }
@@ -120,14 +118,12 @@ void drawRelationship(Relationship *r) {
     for (int i = 0; i < r->num_properties; i++) {
         if (r->properties[i]) {
             char prop_str[64];
-            snprintf(prop_str, sizeof(prop_str), "%s:%s",
-                     r->properties[i]->name, r->properties[i]->type);
+            snprintf(prop_str, sizeof(prop_str), "%s:%s", r->properties[i]->name, r->properties[i]->type);
             mvprintw(r->y + 3 + i, r->x + 1, "%-*s", r->width - 2, prop_str);
         }
     }
 }
-void add_endpoints_to_path(AStarPath *path, int start_x, int start_y, int end_x,
-                           int end_y) {
+void add_endpoints_to_path(AStarPath *path, int start_x, int start_y, int end_x, int end_y) {
     if (!path)
         return;
 
@@ -215,14 +211,10 @@ void drawConnectionAStar(Relationship *r) {
     if (!r || !r->e1 || !r->e2)
         return;
 
-    AttachPoint ap1 = findBestAttachPoint(r->e1->x, r->e1->y, r->e1->width,
-                                          r->e1->height, r->x, r->y);
-    AttachPoint ap_rel_e1 = findBestAttachPoint(r->x, r->y, r->width, r->height,
-                                                r->e1->x, r->e1->y);
-    AttachPoint ap_rel_e2 = findBestAttachPoint(r->x, r->y, r->width, r->height,
-                                                r->e2->x, r->e2->y);
-    AttachPoint ap2 = findBestAttachPoint(r->e2->x, r->e2->y, r->e2->width,
-                                          r->e2->height, r->x, r->y);
+    AttachPoint ap1 = findBestAttachPoint(r->e1->x, r->e1->y, r->e1->width, r->e1->height, r->x, r->y);
+    AttachPoint ap_rel_e1 = findBestAttachPoint(r->x, r->y, r->width, r->height, r->e1->x, r->e1->y);
+    AttachPoint ap_rel_e2 = findBestAttachPoint(r->x, r->y, r->width, r->height, r->e2->x, r->e2->y);
+    AttachPoint ap2 = findBestAttachPoint(r->e2->x, r->e2->y, r->e2->width, r->e2->height, r->x, r->y);
 
     int start1_x = ap1.x;
     int start1_y = ap1.y;
@@ -293,26 +285,20 @@ void drawConnectionAStar(Relationship *r) {
     int margin = 10;
 
     // path 1: entity1 --> relationship
-    AStarGrid *grid1 =
-        astar_create_grid(start1_x, start1_y, end1_x, end1_y, margin);
+    AStarGrid *grid1 = astar_create_grid(start1_x, start1_y, end1_x, end1_y, margin);
     // obstacle marking
     for (int i = 0; i < global_objects.entity_count; i++) {
         if (global_objects.entities[i])
-            astar_mark_obstacle(grid1, global_objects.entities[i]->x,
-                                global_objects.entities[i]->y,
-                                global_objects.entities[i]->width,
-                                global_objects.entities[i]->height);
+            astar_mark_obstacle(grid1, global_objects.entities[i]->x, global_objects.entities[i]->y,
+                                global_objects.entities[i]->width, global_objects.entities[i]->height);
     }
     for (int i = 0; i < global_objects.relationship_count; i++) {
         if (global_objects.relationships[i])
-            astar_mark_obstacle(grid1, global_objects.relationships[i]->x,
-                                global_objects.relationships[i]->y,
-                                global_objects.relationships[i]->width,
-                                global_objects.relationships[i]->height);
+            astar_mark_obstacle(grid1, global_objects.relationships[i]->x, global_objects.relationships[i]->y,
+                                global_objects.relationships[i]->width, global_objects.relationships[i]->height);
     }
 
-    AStarPath *path1 =
-        astar_find_path(grid1, start1_x, start1_y, end1_x, end1_y);
+    AStarPath *path1 = astar_find_path(grid1, start1_x, start1_y, end1_x, end1_y);
 
     if (path1) {
         add_endpoints_to_path(path1, ap1.x, ap1.y, ap_rel_e1.x, ap_rel_e1.y);
@@ -321,25 +307,19 @@ void drawConnectionAStar(Relationship *r) {
     }
     astar_free_grid(grid1);
 
-    AStarGrid *grid2 =
-        astar_create_grid(start2_x, start2_y, end2_x, end2_y, margin);
+    AStarGrid *grid2 = astar_create_grid(start2_x, start2_y, end2_x, end2_y, margin);
     for (int i = 0; i < global_objects.entity_count; i++) {
         if (global_objects.entities[i])
-            astar_mark_obstacle(grid2, global_objects.entities[i]->x,
-                                global_objects.entities[i]->y,
-                                global_objects.entities[i]->width,
-                                global_objects.entities[i]->height);
+            astar_mark_obstacle(grid2, global_objects.entities[i]->x, global_objects.entities[i]->y,
+                                global_objects.entities[i]->width, global_objects.entities[i]->height);
     }
     for (int i = 0; i < global_objects.relationship_count; i++) {
         if (global_objects.relationships[i])
-            astar_mark_obstacle(grid2, global_objects.relationships[i]->x,
-                                global_objects.relationships[i]->y,
-                                global_objects.relationships[i]->width,
-                                global_objects.relationships[i]->height);
+            astar_mark_obstacle(grid2, global_objects.relationships[i]->x, global_objects.relationships[i]->y,
+                                global_objects.relationships[i]->width, global_objects.relationships[i]->height);
     }
 
-    AStarPath *path2 =
-        astar_find_path(grid2, start2_x, start2_y, end2_x, end2_y);
+    AStarPath *path2 = astar_find_path(grid2, start2_x, start2_y, end2_x, end2_y);
 
     if (path2) {
         // inject the actual border coordinates (ap_rel_e2 and ap2)
@@ -362,7 +342,7 @@ WINDOW *create_console_window() {
     int screen_height, screen_width;
     getmaxyx(stdscr, screen_height, screen_width);
 
-    int console_height = 5;
+    int console_height = 6;
     int console_y = screen_height - console_height;
 
     WINDOW *console_win = newwin(console_height, screen_width, console_y, 0);
@@ -371,8 +351,7 @@ WINDOW *create_console_window() {
     return console_win;
 }
 
-void draw_console_prompt(WINDOW *console_win, const char *input,
-                         status status) {
+void draw_console_prompt(WINDOW *console_win, const char *input, status status) {
     int win_height = getmaxy(console_win);
 
     wmove(console_win, win_height - 2, 1);
@@ -395,8 +374,7 @@ void draw_console_prompt(WINDOW *console_win, const char *input,
     wrefresh(console_win);
 }
 
-void draw_all_entities(GlobalObjects global_objects, int moving_index,
-                       bool is_moving) {
+void draw_all_entities(GlobalObjects global_objects, int moving_index, bool is_moving) {
     for (int i = 0; i < global_objects.entity_count; i++) {
         if (global_objects.entities[i]) {
             if (is_moving && i == moving_index) {
@@ -412,8 +390,7 @@ void draw_all_entities(GlobalObjects global_objects, int moving_index,
     }
 }
 
-void draw_all_relationships(GlobalObjects global_objects, int moving_index,
-                            bool is_moving) {
+void draw_all_relationships(GlobalObjects global_objects, int moving_index, bool is_moving) {
     for (int i = 0; i < global_objects.relationship_count; i++) {
         if (global_objects.relationships[i]) {
             if (is_moving && moving_index == i) {
