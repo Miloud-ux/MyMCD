@@ -67,8 +67,7 @@ void addProperty(Entity *e, const char *prop_name, const char *prop_type) {
     }
 }
 
-void addPropertyRelationship(Relationship *r, const char *prop_name,
-                             const char *prop_type) {
+void addPropertyRelationship(Relationship *r, const char *prop_name, const char *prop_type) {
     if (r->num_properties >= MAX_PROPERTIES) {
         return;
     }
@@ -144,8 +143,7 @@ void addCardinalityAPI(const char *input, Relationship *r) {
     r->cards[1] = &c[1];
 }
 
-Relationship *addRelationship(int x, int y, Entity *e1, Entity *e2,
-                              const char *name) {
+Relationship *addRelationship(int x, int y, Entity *e1, Entity *e2, const char *name) {
     if (!e1 || !e2)
         return NULL;
 
@@ -199,8 +197,7 @@ Relationship *addRelationship(int x, int y, Entity *e1, Entity *e2,
     return r;
 }
 
-AttachPoint findBestAttachPoint(int box_x, int box_y, int box_width,
-                                int box_height, int target_x, int target_y) {
+AttachPoint findBestAttachPoint(int box_x, int box_y, int box_width, int box_height, int target_x, int target_y) {
     AttachPoint candidates[4];
 
     candidates[0].x = box_x + box_width / 2;
@@ -235,6 +232,10 @@ AttachPoint findBestAttachPoint(int box_x, int box_y, int box_width,
 
     return best;
 }
+
+// Case insensitive
+// TODO: implement own strcasecmp to avoid redundant dependencies for non-linux
+// OS
 
 Entity *search_entity(const char *name) {
     for (int i = 0; i < global_objects.entity_count; i++) {

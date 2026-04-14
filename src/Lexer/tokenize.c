@@ -59,6 +59,10 @@ void tokenize_content(const char *content, Token tokens[], int *count) {
                 tokens[*count].type = TOKEN_ENTITY;
             } else if (strcmp(tokens[*count].value, "relationship") == 0) {
                 tokens[*count].type = TOKEN_RELATIONSHIP;
+            } else if (strcmp(tokens[*count].value, "add") == 0) {
+                tokens[*count].type = TOKEN_ADD;
+            } else if (strcmp(tokens[*count].value, "property") == 0) {
+                tokens[*count].type = TOKEN_PROPERTY;
             } else {
                 tokens[*count].type = TOKEN_IDENTIFIER;
             }
@@ -66,6 +70,8 @@ void tokenize_content(const char *content, Token tokens[], int *count) {
         (*count)++;
     }
 
+    // Set the position !!
+    tokens[*count].pos = (int)(p - content);
     tokens[*count].length = 1;
     tokens[*count].type = TOKEN_EOF;
     tokens[*count].value[0] = '\0';

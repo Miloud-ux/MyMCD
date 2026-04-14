@@ -21,15 +21,30 @@ typedef struct {
         char e2_name[MAX_NAME_LEN];
 } RelationshipInfo;
 
-typedef enum { TYPE_ENTITY, TYPE_RELATIONSHIP } CreateType;
+typedef enum { TYPE_ENTITY, TYPE_RELATIONSHIP } ElementType;
 
 typedef struct {
-        CreateType type;
+        ElementType type;
         union {
                 EntityInfo e;
                 RelationshipInfo r;
         } Data;
 } CreateCommand;
+
+typedef struct {
+        char identifier_name[MAX_NAME_LEN];
+        char prop_name[MAX_NAME_LEN];
+        char prop_type[MAX_TYPE_LEN];
+} AddCommand;
+
+// TODO: move this func to MCD_elements
+typedef struct {
+        ElementType type;
+        union {
+                Entity *e;
+                Relationship *r;
+        } Element;
+} Element;
 
 void init_parser(Parser *p, const char *content);
 void parse_command(Parser *p, const char *content, WINDOW *console_win);
@@ -42,5 +57,13 @@ bool parse_create_relationship(WINDOW *console, Parser *p, CreateCommand *c);
 
 // to be moved to a seperate file for execution
 void execute_create(CreateCommand c);
+
+// Add property command
+bool parse_add(Parser *p, WINDOW *console, AddCommand *c);
+bool parse_add_property(Parser *p, WINDOW *console, AddCommand *c);
+bool parse_add_property_name(Parser *p, WINDOW *console, AddCommand *c);
+bool parse_add_property_type(Parser *p, WINDOW *console, AddCommand *c);
+Element *get_element_by_name(const char *name);
+void execute_addProperty(AddCommand c);
 
 #endif // !SRC_PARSE_H
