@@ -1,5 +1,3 @@
-#include "Lexer/parse.h"
-#include "Lexer/tokenize.h"
 #include "MCD_elements.h"
 #include "command_processor.h"
 #include "global_objects.h"
@@ -14,7 +12,7 @@ int main() {
     keypad(stdscr, TRUE);
     nodelay(stdscr, TRUE);
     initColors();
-    enum fps { SIXTY = 16, THIRTY = 33 };
+    enum fps { SIXTY = 60, THIRTY = 30 }; // 16, 33
     enum fps current_fps = THIRTY;
 
     timeout(current_fps);
@@ -59,8 +57,7 @@ int main() {
         if (needs_redraw) {
             moving = false;
             erase();
-            mvprintw(0, screen_width / 2 - 10,
-                     "MCD Tool - Type 'help' for commands");
+            mvprintw(0, screen_width / 2 - 10, "MCD Tool - Type 'help' for commands");
             draw_all_entities(global_objects, 0, moving);
             draw_all_relationships(global_objects, 0, moving);
             refresh();
@@ -76,14 +73,38 @@ int main() {
         }
 
         if (ch == '\n') {
-            if (strcmp(input_buffer, "exit") == 0 ||
-                strcmp(input_buffer, "quit") == 0) {
+            if (strcmp(input_buffer, "exit") == 0 || strcmp(input_buffer, "quit") == 0) {
                 is_running = false;
+            } else if (strcmp(input_buffer, "help") == 0) {
+                status = Help;
+
             } else {
                 da_execute(console_win, input_buffer, &needs_redraw);
             }
             input_len = 0;
             input_buffer[0] = '\0';
+        } else if (status == Help) {
+            if (ch == 'q') {
+
+                // revert changes
+                status = Typing;
+                int screen_height, screen_width;
+                getmaxyx(stdscr, screen_height, screen_width);
+
+                int console_y = screen_height - CONSOLE_HEIGHT;
+
+                wresize(console_win, CONSOLE_HEIGHT, screen_width);
+                mvwin(console_win, console_y, 0);
+                werase(console_win);
+
+                needs_redraw = true;
+            } else if (ch == 'e') {
+                // draw examples page
+
+            } else if (ch == 'c') {
+                // draw controls page
+            }
+
         } else if (ch == KEY_BACKSPACE || ch == 127) {
             if (input_len > 0) {
                 input_buffer[--input_len] = '\0';
@@ -110,8 +131,7 @@ int main() {
                     while (moving) {
                         int move_key = getch();
                         if (entity_index >= global_objects.entity_count) {
-                            entity_index =
-                                global_objects.entity_count % entity_index;
+                            entity_index = global_objects.entity_count % entity_index;
                         }
                         switch (move_key) {
                         case KEY_UP:
@@ -134,41 +154,30 @@ int main() {
                             break;
                         }
                         erase();
-                        draw_all_relationships(global_objects,
-                                               relationship_index,
-                                               moving_relationship);
+                        draw_all_relationships(global_objects, relationship_index, moving_relationship);
                         draw_all_entities(global_objects, entity_index, moving);
-                        wnoutrefresh(stdscr);
+                        refresh();
                         draw_console_prompt(console_win, input_buffer, status);
-                        wnoutrefresh(console_win);
-                        doupdate();
                     }
                     break;
                 case 'r':
                     while (moving) {
                         int move_key = getch();
-                        if (relationship_index >=
-                            global_objects.relationship_count) {
-                            relationship_index =
-                                global_objects.relationship_count %
-                                relationship_index;
+                        if (relationship_index >= global_objects.relationship_count) {
+                            relationship_index = global_objects.relationship_count % relationship_index;
                         }
                         switch (move_key) {
                         case KEY_UP:
-                            global_objects.relationships[relationship_index]
-                                ->y -= 1;
+                            global_objects.relationships[relationship_index]->y -= 1;
                             break;
                         case KEY_DOWN:
-                            global_objects.relationships[relationship_index]
-                                ->y += 1;
+                            global_objects.relationships[relationship_index]->y += 1;
                             break;
                         case KEY_RIGHT:
-                            global_objects.relationships[relationship_index]
-                                ->x += 1;
+                            global_objects.relationships[relationship_index]->x += 1;
                             break;
                         case KEY_LEFT:
-                            global_objects.relationships[relationship_index]
-                                ->x -= 1;
+                            global_objects.relationships[relationship_index]->x -= 1;
                             break;
                         case '\t':
                             relationship_index++;
@@ -178,14 +187,10 @@ int main() {
                             break;
                         }
                         erase();
-                        draw_all_entities(global_objects, entity_index,
-                                          moving_entity);
-                        draw_all_relationships(global_objects,
-                                               relationship_index, moving);
-                        wnoutrefresh(stdscr);
+                        draw_all_entities(global_objects, entity_index, moving_entity);
+                        draw_all_relationships(global_objects, relationship_index, moving);
+                        refresh();
                         draw_console_prompt(console_win, input_buffer, status);
-                        wnoutrefresh(console_win);
-                        doupdate();
                     }
                     break;
 
@@ -194,16 +199,6 @@ int main() {
                     status = Typing;
                     break;
                 }
-
-                erase();
-                draw_all_entities(global_objects, entity_index, moving_entity);
-                draw_all_relationships(global_objects, relationship_index,
-                                       moving_relationship);
-
-                wnoutrefresh(stdscr);
-                draw_console_prompt(console_win, input_buffer, status);
-                wnoutrefresh(console_win);
-                doupdate();
             }
         }
     }

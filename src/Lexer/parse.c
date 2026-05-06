@@ -1,8 +1,7 @@
 #include "parse.h"
 #include "../MCD_elements.h"
-#include "../command_processor.h"
+#include "global_objects.h"
 #include "ncurses.h"
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -81,7 +80,8 @@ void parse_command(Parser *p, const char *content, WINDOW *console_win) {
         } else if (t.type == TOKEN_HELP) {
             // parse_help(p);
         } else if (t.type == TOKEN_CLEAR) {
-            // parse_clear(p);
+            advance_token(&p->current);
+            parse_clear(p, console_win);
         } else if (t.type == TOKEN_EOF) {
             break;
         } else {
@@ -188,10 +188,18 @@ bool parse_create_relationship(WINDOW *console, Parser *p, CreateCommand *c) {
 
 void execute_create(CreateCommand c) {
     if (c.type == TYPE_ENTITY) {
-        createEntity(c.Data.e.name, 10, 10);
+        if (!search_entity(c.Data.e.name)) {
+            createEntity(c.Data.e.name, 10, 10);
+        }
     } else {
-        Entity *e1 = createEntity(c.Data.r.e1_name, 10, 10);
-        Entity *e2 = createEntity(c.Data.r.e2_name, 10, 10);
+        Entity *e1 = search_entity(c.Data.r.e1_name), *e2 = search_entity(c.Data.r.e2_name);
+        if (!e1) {
+            e1 = createEntity(c.Data.r.e1_name, 10, 10);
+        }
+        if (!e2) {
+            e2 = createEntity(c.Data.r.e2_name, 10, 10);
+        }
+        // allocation failed
         if (!e1 || !e2)
             return;
         addRelationship(10, 10, e1, e2, c.Data.r.name);
@@ -301,3 +309,5 @@ void execute_addProperty(AddCommand c) {
         return;
     }
 }
+
+void parse_clear(Parser *p, WINDOW *console) { init_global_objects(); }

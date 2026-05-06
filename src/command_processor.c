@@ -31,6 +31,7 @@ void da_execute(WINDOW *console_win, const char *input, bool *needs_redraw) {
     tokenize_content(input, p->tokens, &p->count);
     parse_command(p, input, console_win);
     *needs_redraw = true;
+    // performance note ( reallocating each loop )
     free(p);
 }
 

@@ -52,6 +52,12 @@ void addProperty(Entity *e, const char *prop_name, const char *prop_type) {
         return;
     }
 
+    for (int i = 0; i < e->num_properties; i++) {
+        if (strcmp(prop_name, e->properties[i]->name) == 0) {
+            return;
+        }
+    }
+
     Property *p1 = malloc(sizeof(Property));
     if (p1 == NULL) {
         return;
@@ -70,6 +76,13 @@ void addProperty(Entity *e, const char *prop_name, const char *prop_type) {
 void addPropertyRelationship(Relationship *r, const char *prop_name, const char *prop_type) {
     if (r->num_properties >= MAX_PROPERTIES) {
         return;
+    }
+
+    for (int i = 0; i < r->num_properties; i++) {
+        if (strcmp(prop_name, r->properties[i]->name) == 0) {
+            // add func expected()  to alert user
+            return;
+        }
     }
 
     Property *p1 = malloc(sizeof(Property));

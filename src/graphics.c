@@ -25,7 +25,7 @@ void initColors() {
     init_pair(3, COLOR_YELLOW, COLOR_BLACK);
     init_pair(4, COLOR_WHITE, COLOR_BLUE);
     init_pair(5, COLOR_MAGENTA, COLOR_BLACK);
-    init_pair(6, COLOR_CYAN, COLOR_BLACK);
+    init_pair(6, COLOR_CYAN, COLOR_WHITE);
     init_pair(7, COLOR_WHITE, COLOR_BLACK);
 }
 
@@ -342,7 +342,7 @@ WINDOW *create_console_window() {
     int screen_height, screen_width;
     getmaxyx(stdscr, screen_height, screen_width);
 
-    int console_height = 6;
+    int console_height = CONSOLE_HEIGHT;
     int console_y = screen_height - console_height;
 
     WINDOW *console_win = newwin(console_height, screen_width, console_y, 0);
@@ -353,25 +353,118 @@ WINDOW *create_console_window() {
 
 void draw_console_prompt(WINDOW *console_win, const char *input, status status) {
     int win_height = getmaxy(console_win);
+    int win_width = getmaxx(console_win);
 
-    wmove(console_win, win_height - 2, 1);
-    wclrtoeol(console_win);
+    int std_screen_width, std_screen_height;
+    getmaxyx(stdscr, std_screen_height, std_screen_width);
 
-    mvwprintw(console_win, win_height - 2, 1, ">> %s_", input);
-    int screen_width = getmaxx(console_win);
+    if (status == Typing || status == Editing) {
+        wattron(console_win, COLOR_PAIR(0));
+        wmove(console_win, win_height - 2, 1);
+        wclrtoeol(console_win);
 
-    box(console_win, 0, 0);
-    if (status == Typing) {
+        box(console_win, 0, 0);
+
+        // header
+        wattron(console_win, A_BOLD);
+        mvwprintw(console_win, 0, 2, " Console ");
+        wattroff(console_win, A_BOLD);
+
+        // status badge
+        if (status == Typing) {
+            wattron(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+            mvwprintw(console_win, 0, win_width - 10, " TYPING ");
+            wattroff(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        } else if (status == Editing) {
+            wattron(console_win, COLOR_PAIR(4) | A_BOLD | A_REVERSE);
+            mvwprintw(console_win, 0, win_width - 11, " EDITING ");
+            wattroff(console_win, COLOR_PAIR(4) | A_BOLD | A_REVERSE);
+        }
+
         wattron(console_win, COLOR_PAIR(7) | A_BOLD);
-        mvwprintw(console_win, 0, screen_width - 9, " Typing ");
+        mvwprintw(console_win, win_height - 2, 1, ">> ");
         wattroff(console_win, COLOR_PAIR(7) | A_BOLD);
-    } else if (status == Editing) {
-        wattron(console_win, COLOR_PAIR(4) | A_BOLD);
-        mvwprintw(console_win, 0, screen_width - 9, " Editing ");
-        wattroff(console_win, COLOR_PAIR(4) | A_BOLD);
+
+        wattron(console_win, A_BOLD);
+        wprintw(console_win, "%s", input);
+        wattroff(console_win, A_BOLD);
+
+        wrefresh(console_win);
+
+    } else if (status == Help) {
+        int h = 22;
+        int w = 80;
+
+        if (h >= std_screen_height - 2)
+            h = std_screen_height - 2;
+        if (w >= std_screen_width - 2)
+            w = std_screen_width - 2;
+
+        int center_y = (std_screen_height - h) / 2;
+        int center_x = (std_screen_width - w) / 2;
+
+        wresize(console_win, h, w);
+        mvwin(console_win, center_y, center_x);
+
+        werase(console_win);
+        box(console_win, 0, 0);
+
+        // header
+        wattron(console_win, COLOR_PAIR(6) | A_BOLD | A_REVERSE);
+        mvwprintw(console_win, 1, (w / 2) - 14, "  MCD TOOL COMMAND GUIDE  ");
+        wattroff(console_win, COLOR_PAIR(6) | A_BOLD | A_REVERSE);
+
+        // section: Syntax
+        wattron(console_win, COLOR_PAIR(6) | A_BOLD | A_UNDERLINE);
+        mvwprintw(console_win, 4, 4, "COMMANDS");
+        wattroff(console_win, COLOR_PAIR(6) | A_BOLD | A_UNDERLINE);
+
+        // item 1
+        mvwprintw(console_win, 6, 6, ">> ");
+        wattron(console_win, A_BOLD);
+        waddstr(console_win, "create entity ");
+        wattroff(console_win, A_BOLD);
+        wattron(console_win, A_DIM);
+        waddstr(console_win, "<name>");
+        wattroff(console_win, A_DIM);
+
+        // item 2
+        mvwprintw(console_win, 7, 6, ">> ");
+        wattron(console_win, A_BOLD);
+        waddstr(console_win, "create relationship ");
+        wattroff(console_win, A_BOLD);
+        wattron(console_win, A_DIM);
+        waddstr(console_win, "<name> <e1> <e2>");
+        wattroff(console_win, A_DIM);
+
+        // item 3
+        mvwprintw(console_win, 8, 6, ">> ");
+        wattron(console_win, A_BOLD);
+        waddstr(console_win, "add property ");
+        wattroff(console_win, A_BOLD);
+        wattron(console_win, A_DIM);
+        waddstr(console_win, "\"target\" \"prop\" type");
+        wattroff(console_win, A_DIM);
+
+        // section: controls
+        // wattron(console_win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
+        // mvwprintw(console_win, 11, 4, "HOTKEYS");
+        // wattroff(console_win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
+        //
+        // mvwprintw(console_win, 13, 6, "[TAB] Enter Edit Mode     [q]   Close Help");
+        // mvwprintw(console_win, 14, 6, "[ESC] Back to Typing      [x]   Exit Movement");
+        // mvwprintw(console_win, 15, 6, "[ARROWS] Move Elements");
+
+        wattron(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        mvwprintw(console_win, h - 2, (w / 2) - 11, "Press 'q' to exit");
+        wattroff(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+
+        wattron(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        mvwprintw(console_win, h - 2, 2, "Press 'h' for hotkeys");
+        mvwprintw(console_win, h - 2, w - 24, "Press 'e' for examples");
+        wattroff(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        wrefresh(console_win);
     }
-    mvwprintw(console_win, 0, 2, " Console ");
-    wrefresh(console_win);
 }
 
 void draw_all_entities(GlobalObjects global_objects, int moving_index, bool is_moving) {

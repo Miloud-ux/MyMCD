@@ -66,4 +66,7 @@ bool parse_add_property_type(Parser *p, WINDOW *console, AddCommand *c);
 Element *get_element_by_name(const char *name);
 void execute_addProperty(AddCommand c);
 
+// clear command
+void parse_clear(Parser *p, WINDOW *console);
+
 #endif // !SRC_PARSE_H
