@@ -8,6 +8,12 @@
 #define CONSOLE_HEIGHT 6
 
 typedef enum status { Typing, Editing, Help } status;
+typedef enum HelpPage { Main, Hotkeys, Examples } HelpPage;
+
+/* Main: Default halp page ie:  basic commands
+ * Hotkeys: Keyboard shortcuts ie: Editing mode
+ * Examples: Examples duh
+ */
 
 void drawEntity(Entity *e);
 void drawRelationship(Relationship *r);
@@ -20,7 +26,7 @@ void debugPrintPath(AStarPath *path, const char *name);
 AStarPath *smooth_path(AStarPath *path);
 void draw_path_with_corners(AStarPath *path);
 WINDOW *create_console_window();
-void draw_console_prompt(WINDOW *console_win, const char *input, status status);
+void draw_console_prompt(WINDOW *console_win, const char *input, status status, HelpPage page);
 void draw_all_entities(GlobalObjects global_objects, int moving_index, bool is_moving);
 void draw_all_relationships(GlobalObjects global_objects, int moving_index, bool is_moving);
 

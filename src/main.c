@@ -41,13 +41,16 @@ int main() {
     WINDOW *console_win = create_console_window();
     char input_buffer[256] = "";
     int input_len = 0;
+
+    // init console_win
     bool moving = false;
     status status = Typing;
+    HelpPage page = Main;
 
     erase();
     draw_all_entities(global_objects, 0, moving);
     draw_all_relationships(global_objects, 0, moving);
-    draw_console_prompt(console_win, input_buffer, status);
+    draw_console_prompt(console_win, input_buffer, status, page);
     refresh();
 
     bool is_running = true;
@@ -64,7 +67,7 @@ int main() {
             needs_redraw = false;
         }
 
-        draw_console_prompt(console_win, input_buffer, status);
+        draw_console_prompt(console_win, input_buffer, status, page);
 
         int ch = getch();
 
@@ -77,7 +80,6 @@ int main() {
                 is_running = false;
             } else if (strcmp(input_buffer, "help") == 0) {
                 status = Help;
-
             } else {
                 da_execute(console_win, input_buffer, &needs_redraw);
             }
@@ -85,7 +87,6 @@ int main() {
             input_buffer[0] = '\0';
         } else if (status == Help) {
             if (ch == 'q') {
-
                 // revert changes
                 status = Typing;
                 int screen_height, screen_width;
@@ -98,11 +99,14 @@ int main() {
                 werase(console_win);
 
                 needs_redraw = true;
+            } else if (ch == 'm') {
+                // TODO: why escape takes long here and in editing mode
+                // potential replace with 'q'
+                page = Main;
+            } else if (ch == 'h') {
+                page = Hotkeys;
             } else if (ch == 'e') {
-                // draw examples page
-
-            } else if (ch == 'c') {
-                // draw controls page
+                page = Examples;
             }
 
         } else if (ch == KEY_BACKSPACE || ch == 127) {
@@ -149,7 +153,7 @@ int main() {
                         case '\t':
                             entity_index++;
                             break;
-                        case 27:
+                        case 'q':
                             moving = false;
                             break;
                         }
@@ -157,7 +161,7 @@ int main() {
                         draw_all_relationships(global_objects, relationship_index, moving_relationship);
                         draw_all_entities(global_objects, entity_index, moving);
                         refresh();
-                        draw_console_prompt(console_win, input_buffer, status);
+                        draw_console_prompt(console_win, input_buffer, status, page);
                     }
                     break;
                 case 'r':
@@ -182,7 +186,7 @@ int main() {
                         case '\t':
                             relationship_index++;
                             break;
-                        case 27:
+                        case 'q':
                             moving = false;
                             break;
                         }
@@ -190,7 +194,7 @@ int main() {
                         draw_all_entities(global_objects, entity_index, moving_entity);
                         draw_all_relationships(global_objects, relationship_index, moving);
                         refresh();
-                        draw_console_prompt(console_win, input_buffer, status);
+                        draw_console_prompt(console_win, input_buffer, status, page);
                     }
                     break;
 

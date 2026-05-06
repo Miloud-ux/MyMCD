@@ -26,18 +26,22 @@ void tokenize_content(const char *content, Token tokens[], int *count) {
 
         // handle string token
 
-        if (*p == '"') {
+        if (*p == '"' || *p == '\'') {
             // skip the quotations
             p++;
             int len = 0;
             // check entity / relationship domain integrity length in
             // MCDelements.h
 
-            while (*p != '\0' && *p != '"' && len < 63) {
+            while (*p != '\0' && *p != '"' && *p != '\'' && len < 63) {
                 tokens[*count].value[len++] = *p++;
             }
-            if (*p == '"')
+            if (*p == '"' || *p == '\'') {
                 p++;
+            } else {
+                goto GENERIC_TOKEN;
+                // TODO: implement a better fix for missing closing quotations
+            }
             tokens[*count].pos = (int)(p - content);
             tokens[*count].length = len;
             tokens[*count].value[len] = '\0';
@@ -66,6 +70,8 @@ void tokenize_content(const char *content, Token tokens[], int *count) {
             } else if (strcmp(tokens[*count].value, "clear") == 0) {
                 tokens[*count].type = TOKEN_CLEAR;
             } else {
+                // testing
+            GENERIC_TOKEN:
                 tokens[*count].type = TOKEN_IDENTIFIER;
             }
         }

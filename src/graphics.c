@@ -40,8 +40,6 @@ void draw_hline_at(int y, int x1, int x2, chtype ch) {
         x2 = temp;
     }
     move(y, x1);
-    // ncurses hline(ch, n) draws n characters.
-    // To go from 10 to 12, we need 3 characters (10, 11, 12).
     hline(ch, x2 - x1 + 1);
 }
 
@@ -351,7 +349,7 @@ WINDOW *create_console_window() {
     return console_win;
 }
 
-void draw_console_prompt(WINDOW *console_win, const char *input, status status) {
+void draw_console_prompt(WINDOW *console_win, const char *input, status status, HelpPage page) {
     int win_height = getmaxy(console_win);
     int win_width = getmaxx(console_win);
 
@@ -411,58 +409,72 @@ void draw_console_prompt(WINDOW *console_win, const char *input, status status) 
 
         // header
         wattron(console_win, COLOR_PAIR(6) | A_BOLD | A_REVERSE);
-        mvwprintw(console_win, 1, (w / 2) - 14, "  MCD TOOL COMMAND GUIDE  ");
+        mvwprintw(console_win, 1, (w / 2) - 14, "  MCD TOOL MANUAL  ");
         wattroff(console_win, COLOR_PAIR(6) | A_BOLD | A_REVERSE);
-
-        // section: Syntax
-        wattron(console_win, COLOR_PAIR(6) | A_BOLD | A_UNDERLINE);
-        mvwprintw(console_win, 4, 4, "COMMANDS");
-        wattroff(console_win, COLOR_PAIR(6) | A_BOLD | A_UNDERLINE);
-
-        // item 1
-        mvwprintw(console_win, 6, 6, ">> ");
-        wattron(console_win, A_BOLD);
-        waddstr(console_win, "create entity ");
-        wattroff(console_win, A_BOLD);
-        wattron(console_win, A_DIM);
-        waddstr(console_win, "<name>");
-        wattroff(console_win, A_DIM);
-
-        // item 2
-        mvwprintw(console_win, 7, 6, ">> ");
-        wattron(console_win, A_BOLD);
-        waddstr(console_win, "create relationship ");
-        wattroff(console_win, A_BOLD);
-        wattron(console_win, A_DIM);
-        waddstr(console_win, "<name> <e1> <e2>");
-        wattroff(console_win, A_DIM);
-
-        // item 3
-        mvwprintw(console_win, 8, 6, ">> ");
-        wattron(console_win, A_BOLD);
-        waddstr(console_win, "add property ");
-        wattroff(console_win, A_BOLD);
-        wattron(console_win, A_DIM);
-        waddstr(console_win, "\"target\" \"prop\" type");
-        wattroff(console_win, A_DIM);
-
-        // section: controls
-        // wattron(console_win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
-        // mvwprintw(console_win, 11, 4, "HOTKEYS");
-        // wattroff(console_win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
-        //
-        // mvwprintw(console_win, 13, 6, "[TAB] Enter Edit Mode     [q]   Close Help");
-        // mvwprintw(console_win, 14, 6, "[ESC] Back to Typing      [x]   Exit Movement");
-        // mvwprintw(console_win, 15, 6, "[ARROWS] Move Elements");
-
         wattron(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
         mvwprintw(console_win, h - 2, (w / 2) - 11, "Press 'q' to exit");
         wattroff(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
 
         wattron(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        mvwprintw(console_win, h - 3, 27, "Press 'm' main page"); // rename to Default maybe
         mvwprintw(console_win, h - 2, 2, "Press 'h' for hotkeys");
         mvwprintw(console_win, h - 2, w - 24, "Press 'e' for examples");
         wattroff(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        switch (page) {
+        case Main:
+            // section: Syntax
+            wattron(console_win, COLOR_PAIR(6) | A_BOLD | A_UNDERLINE);
+            mvwprintw(console_win, 4, 4, "COMMANDS");
+            wattroff(console_win, COLOR_PAIR(6) | A_BOLD | A_UNDERLINE);
+
+            // item 1
+            mvwprintw(console_win, 6, 6, ">> ");
+            wattron(console_win, A_BOLD);
+            waddstr(console_win, "create entity ");
+            wattroff(console_win, A_BOLD);
+            wattron(console_win, A_DIM);
+            waddstr(console_win, "<name>");
+            wattroff(console_win, A_DIM);
+
+            // item 2
+            mvwprintw(console_win, 7, 6, ">> ");
+            wattron(console_win, A_BOLD);
+            waddstr(console_win, "create relationship ");
+            wattroff(console_win, A_BOLD);
+            wattron(console_win, A_DIM);
+            waddstr(console_win, "<name> <e1> <e2>");
+            wattroff(console_win, A_DIM);
+
+            // item 3
+            mvwprintw(console_win, 8, 6, ">> ");
+            wattron(console_win, A_BOLD);
+            waddstr(console_win, "add property ");
+            wattroff(console_win, A_BOLD);
+            wattron(console_win, A_DIM);
+            waddstr(console_win, "\"target\" \"prop\" type");
+            wattroff(console_win, A_DIM);
+            break;
+        case Hotkeys:
+            wattron(console_win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
+            mvwprintw(console_win, 4, 4, "HOTKEYS & NAVIGATION");
+            wattroff(console_win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
+
+            int hy = 6;
+            mvwprintw(console_win, hy++, 6, "[TAB]      Enter General Edit Mode");
+            mvwprintw(console_win, hy++, 6, "[e]        Move Entities (use Arrow Keys)");
+            mvwprintw(console_win, hy++, 6, "[r]        Move Relationships");
+            mvwprintw(console_win, hy++, 6, "[q]        Back to General Edit / Exit Page");
+            mvwprintw(console_win, hy++, 6, "[x]        Quit Movement Mode");
+            break;
+
+        case Examples:
+            mvwprintw(console_win, 6, 6, "Examples coming soon...");
+            break;
+
+        default:
+            break;
+        }
+
         wrefresh(console_win);
     }
 }
