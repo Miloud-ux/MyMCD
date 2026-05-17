@@ -41,6 +41,9 @@ int main() {
     WINDOW *console_win = create_console_window();
     char input_buffer[256] = "";
     int input_len = 0;
+    char search_buffer[256] = "";
+    int search_len = 0;
+    bool is_searching = false;
 
     // init console_win
     bool moving = false;
@@ -50,7 +53,7 @@ int main() {
     erase();
     draw_all_entities(global_objects, 0, moving);
     draw_all_relationships(global_objects, 0, moving);
-    draw_console_prompt(console_win, input_buffer, status, page);
+    draw_console_prompt(console_win, input_buffer, status, page, is_searching);
     refresh();
 
     bool is_running = true;
@@ -67,7 +70,7 @@ int main() {
             needs_redraw = false;
         }
 
-        draw_console_prompt(console_win, input_buffer, status, page);
+        draw_console_prompt(console_win, input_buffer, status, page, is_searching);
 
         int ch = getch();
 
@@ -100,15 +103,45 @@ int main() {
 
                 needs_redraw = true;
             } else if (ch == 'm') {
-                // TODO: why escape takes long here and in editing mode
-                // potential replace with 'q'
+                // TODO: why escape takes long here and in editing mode (replaced with q)
+                // This is for commands
+                // implement a search for command and highlight
                 page = Main;
             } else if (ch == 'h') {
                 page = Hotkeys;
             } else if (ch == 'e') {
                 page = Examples;
-            }
+            } else if (page == Main && ch == '/') {
+                is_searching = true;
+                while (is_searching) {
+                    draw_console_prompt(console_win, search_buffer, status, page, is_searching);
+                    int search_char = getch();
+                    if (search_char == ERR) {
+                        continue;
+                    }
 
+                    if (search_char == '\n') {
+                        __attribute__((weak)) void do_search(const char *search_buffer);
+
+                        search_len = 0;
+                        search_buffer[0] = '\0';
+
+                    } else if (search_char == 'q') {
+                        is_searching = false;
+                        search_len = 0;
+                        search_buffer[0] = '\0';
+                    } else if (search_char == KEY_BACKSPACE || search_char == 127) {
+                        if (search_len > 0) {
+                            search_buffer[--search_len] = '\0';
+                        }
+                    } else if (search_char >= 32 && search_char <= 126) {
+                        if (search_len < 255) {
+                            search_buffer[search_len++] = search_char;
+                            search_buffer[search_len] = '\0';
+                        }
+                    }
+                }
+            }
         } else if (ch == KEY_BACKSPACE || ch == 127) {
             if (input_len > 0) {
                 input_buffer[--input_len] = '\0';
@@ -161,7 +194,7 @@ int main() {
                         draw_all_relationships(global_objects, relationship_index, moving_relationship);
                         draw_all_entities(global_objects, entity_index, moving);
                         refresh();
-                        draw_console_prompt(console_win, input_buffer, status, page);
+                        draw_console_prompt(console_win, input_buffer, status, page, is_searching);
                     }
                     break;
                 case 'r':
@@ -194,7 +227,7 @@ int main() {
                         draw_all_entities(global_objects, entity_index, moving_entity);
                         draw_all_relationships(global_objects, relationship_index, moving);
                         refresh();
-                        draw_console_prompt(console_win, input_buffer, status, page);
+                        draw_console_prompt(console_win, input_buffer, status, page, is_searching);
                     }
                     break;
 

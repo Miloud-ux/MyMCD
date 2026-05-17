@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -Isrc -Isrc/DSA
+CFLAGS = -Wall -pg -g -Wextra -Isrc -Isrc/DSA
 LIBS = -lncurses
 
 SRC = src/main.c \

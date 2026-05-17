@@ -21,6 +21,7 @@ void initColors() {
     // TODO : research this func for terminals that don't support colors
     // use_default_colors();
     init_pair(1, COLOR_RED, COLOR_BLACK);
+
     init_pair(2, COLOR_GREEN, COLOR_BLACK);
     init_pair(3, COLOR_YELLOW, COLOR_BLACK);
     init_pair(4, COLOR_WHITE, COLOR_BLUE);
@@ -349,7 +350,7 @@ WINDOW *create_console_window() {
     return console_win;
 }
 
-void draw_console_prompt(WINDOW *console_win, const char *input, status status, HelpPage page) {
+void draw_console_prompt(WINDOW *console_win, const char *input, status status, HelpPage page, bool is_searching) {
     int win_height = getmaxy(console_win);
     int win_width = getmaxx(console_win);
 
@@ -409,17 +410,12 @@ void draw_console_prompt(WINDOW *console_win, const char *input, status status, 
 
         // header
         wattron(console_win, COLOR_PAIR(6) | A_BOLD | A_REVERSE);
-        mvwprintw(console_win, 1, (w / 2) - 14, "  MCD TOOL MANUAL  ");
+        mvwprintw(console_win, 1, (w / 2) - 4, "  HELP  ");
         wattroff(console_win, COLOR_PAIR(6) | A_BOLD | A_REVERSE);
-        wattron(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        wattron(console_win, COLOR_PAIR(7) | A_BOLD);
         mvwprintw(console_win, h - 2, (w / 2) - 11, "Press 'q' to exit");
-        wattroff(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        wattroff(console_win, COLOR_PAIR(7) | A_BOLD);
 
-        wattron(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
-        mvwprintw(console_win, h - 3, 27, "Press 'm' main page"); // rename to Default maybe
-        mvwprintw(console_win, h - 2, 2, "Press 'h' for hotkeys");
-        mvwprintw(console_win, h - 2, w - 24, "Press 'e' for examples");
-        wattroff(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
         switch (page) {
         case Main:
             // section: Syntax
@@ -433,7 +429,7 @@ void draw_console_prompt(WINDOW *console_win, const char *input, status status, 
             waddstr(console_win, "create entity ");
             wattroff(console_win, A_BOLD);
             wattron(console_win, A_DIM);
-            waddstr(console_win, "<name>");
+            waddstr(console_win, "\"e_name\"");
             wattroff(console_win, A_DIM);
 
             // item 2
@@ -442,7 +438,7 @@ void draw_console_prompt(WINDOW *console_win, const char *input, status status, 
             waddstr(console_win, "create relationship ");
             wattroff(console_win, A_BOLD);
             wattron(console_win, A_DIM);
-            waddstr(console_win, "<name> <e1> <e2>");
+            waddstr(console_win, "\"r_name\" \"e1_name \"\"e2_name\"");
             wattroff(console_win, A_DIM);
 
             // item 3
@@ -453,6 +449,26 @@ void draw_console_prompt(WINDOW *console_win, const char *input, status status, 
             wattron(console_win, A_DIM);
             waddstr(console_win, "\"target\" \"prop\" type");
             wattroff(console_win, A_DIM);
+
+            wattron(console_win, COLOR_PAIR(3) | A_BOLD | A_UNDERLINE);
+            mvwprintw(console_win, 10, 4, "Note:");
+            wattroff(console_win, COLOR_PAIR(3) | A_BOLD | A_UNDERLINE);
+
+            mvwprintw(console_win, 11, 4, "You Must use quotations either double or single.");
+
+            wattron(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+            mvwprintw(console_win, h - 2, 2, "Press 'h' for hotkeys");
+            mvwprintw(console_win, h - 2, w - 24, "Press 'e' for examples");
+            wattroff(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+
+            if (is_searching) {
+                wmove(console_win, h - 2, 1);
+                wclrtoeol(console_win);
+                wmove(console_win, h - 3, 1);
+                whline(console_win, ACS_HLINE, w);
+                mvwprintw(console_win, h - 2, 2, "/%s", input);
+            }
+
             break;
         case Hotkeys:
             wattron(console_win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
@@ -465,10 +481,20 @@ void draw_console_prompt(WINDOW *console_win, const char *input, status status, 
             mvwprintw(console_win, hy++, 6, "[r]        Move Relationships");
             mvwprintw(console_win, hy++, 6, "[q]        Back to General Edit / Exit Page");
             mvwprintw(console_win, hy++, 6, "[x]        Quit Movement Mode");
+
+            wattron(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+            mvwprintw(console_win, h - 2, 2, "Press 'e' for examples");
+            mvwprintw(console_win, h - 2, w - 29, "Press 'm' back to main help");
+            wattroff(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
             break;
 
         case Examples:
             mvwprintw(console_win, 6, 6, "Examples coming soon...");
+
+            wattron(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+            mvwprintw(console_win, h - 2, 2, "Press 'h' for hotkeys");
+            mvwprintw(console_win, h - 2, w - 29, "Press 'm' back to main help");
+            wattroff(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
             break;
 
         default:
