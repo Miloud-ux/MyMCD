@@ -1,7 +1,5 @@
 #include "tokenize.h"
-#include "parse.h"
 #include <ctype.h>
-#include <stdio.h>
 #include <string.h>
 
 const char *skip_whitespace(const char *p, const char *content) {
@@ -39,7 +37,7 @@ void tokenize_content(const char *content, Token tokens[], int *count) {
             if (*p == '"' || *p == '\'') {
                 p++;
             } else {
-                goto GENERIC_TOKEN;
+                goto EOF;
                 // TODO: implement a better fix for missing closing quotations
             }
             tokens[*count].pos = (int)(p - content);
@@ -71,7 +69,6 @@ void tokenize_content(const char *content, Token tokens[], int *count) {
                 tokens[*count].type = TOKEN_CLEAR;
             } else {
                 // testing
-            GENERIC_TOKEN:
                 tokens[*count].type = TOKEN_IDENTIFIER;
             }
         }
@@ -79,6 +76,7 @@ void tokenize_content(const char *content, Token tokens[], int *count) {
     }
 
     // Set the position !!
+EOF:
     tokens[*count].pos = (int)(p - content);
     tokens[*count].length = 1;
     tokens[*count].type = TOKEN_EOF;

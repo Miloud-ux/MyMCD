@@ -1,6 +1,8 @@
 #ifndef SRC_TOKENIZE_H_
 #define SRC_TOKENIZE_H_
 
+#define MAX_TOKENS_NUM_PER_COMMAND 64
+
 typedef enum {
     TOKEN_EOF, // defaults to 0 (good fo init)
     TOKEN_CREATE,

@@ -5,7 +5,7 @@
 #include <ncurses.h>
 
 typedef struct {
-        Token tokens[64];
+        Token tokens[MAX_TOKENS_NUM_PER_COMMAND];
         int count;
         int current;
         const char *userInput;

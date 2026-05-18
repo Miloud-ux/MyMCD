@@ -1,5 +1,6 @@
 #include "graphics.h"
 #include "DSA/astar.h"
+#include "help_window.h"
 #include <ncurses.h>
 #include <string.h>
 
@@ -391,8 +392,8 @@ void draw_console_prompt(WINDOW *console_win, const char *input, status status, 
         wrefresh(console_win);
 
     } else if (status == Help) {
-        int h = 22;
-        int w = 80;
+        int h = HELP_WIN_HEIGHT;
+        int w = HELP_WIN_WIDTH;
 
         if (h >= std_screen_height - 2)
             h = std_screen_height - 2;

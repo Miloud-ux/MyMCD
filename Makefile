@@ -10,6 +10,7 @@ SRC = src/main.c \
       src/Lexer/parse.c \
       src/Lexer/tokenize.c \
 	  src/command_processor.c \
+	  src/help_window.c \
       src/DSA/pqueue.c
 
 TARGET = main

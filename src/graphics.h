@@ -3,12 +3,12 @@
 #include "DSA/astar.h"
 #include "MCD_elements.h"
 #include "global_objects.h"
+#include "help_window.h"
 #include <ncurses.h>
 
 #define CONSOLE_HEIGHT 6
 
 typedef enum status { Typing, Editing, Help } status;
-typedef enum HelpPage { Main, Hotkeys, Examples } HelpPage;
 
 /* Main: Default halp page ie:  basic commands
  * Hotkeys: Keyboard shortcuts ie: Editing mode

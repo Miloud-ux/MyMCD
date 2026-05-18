@@ -2,6 +2,7 @@
 #include "command_processor.h"
 #include "global_objects.h"
 #include "graphics.h"
+#include "help_window.h"
 #include <ncurses.h>
 #include <string.h>
 
@@ -49,6 +50,9 @@ int main() {
     bool moving = false;
     status status = Typing;
     HelpPage page = Main;
+    // init help window
+    HelpWindow hwin;
+    init_help_window(&hwin, Main);
 
     erase();
     draw_all_entities(global_objects, 0, moving);
@@ -119,13 +123,11 @@ int main() {
                     if (search_char == ERR) {
                         continue;
                     }
-
                     if (search_char == '\n') {
                         __attribute__((weak)) void do_search(const char *search_buffer);
-
+                        do_search(search_buffer);
                         search_len = 0;
                         search_buffer[0] = '\0';
-
                     } else if (search_char == 'q') {
                         is_searching = false;
                         search_len = 0;
@@ -194,6 +196,8 @@ int main() {
                         draw_all_relationships(global_objects, relationship_index, moving_relationship);
                         draw_all_entities(global_objects, entity_index, moving);
                         refresh();
+                        // TODO : implement a public API to choose whether to make call a draw
+                        //  help console or a command console func
                         draw_console_prompt(console_win, input_buffer, status, page, is_searching);
                     }
                     break;
