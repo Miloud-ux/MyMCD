@@ -21,4 +21,9 @@ void init_help_window(HelpWindow *win, HelpPage current_page) {
     }
 }
 
-void set_current_page(HelpWindow *win, HelpPage page);
+void set_current_page(HelpWindow *win, HelpPage page) {
+    if (!win) {
+        return;
+    }
+    win->current_page = page;
+}

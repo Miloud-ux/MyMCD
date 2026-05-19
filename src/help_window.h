@@ -23,6 +23,11 @@
 #define MAX_TOKENS_PER_LINE 40
 
 typedef enum HelpPage { Main, Hotkeys, Examples, HelpPageNum } HelpPage;
+typedef enum HelpAction {
+    Navigation, // Defaults to 0
+    Search      // Search = 1 (true)
+} HelpAction;
+
 // Main: default page
 
 typedef struct HelpLine {
@@ -44,4 +49,5 @@ typedef struct HelpWindow {
 
 void init_help_window(HelpWindow *win, HelpPage current_page);
 void set_current_page(HelpWindow *win, HelpPage page);
+
 #endif // !HELP_WINDOW_H

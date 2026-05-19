@@ -44,12 +44,13 @@ int main() {
     int input_len = 0;
     char search_buffer[256] = "";
     int search_len = 0;
-    bool is_searching = false;
+    HelpAction Action = Navigation;
 
     // init console_win
     bool moving = false;
     status status = Typing;
     HelpPage page = Main;
+
     // init help window
     HelpWindow hwin;
     init_help_window(&hwin, Main);
@@ -57,7 +58,7 @@ int main() {
     erase();
     draw_all_entities(global_objects, 0, moving);
     draw_all_relationships(global_objects, 0, moving);
-    draw_console_prompt(console_win, input_buffer, status, page, is_searching);
+    draw_console_prompt(console_win, input_buffer, status);
     refresh();
 
     bool is_running = true;
@@ -65,35 +66,135 @@ int main() {
 
     while (is_running) {
         if (needs_redraw) {
-            moving = false;
-            erase();
-            mvprintw(0, screen_width / 2 - 10, "MCD Tool - Type 'help' for commands");
-            draw_all_entities(global_objects, 0, moving);
-            draw_all_relationships(global_objects, 0, moving);
-            refresh();
-            needs_redraw = false;
+            draw_all_and_refresh(screen_width, &moving, &needs_redraw);
         }
 
-        draw_console_prompt(console_win, input_buffer, status, page, is_searching);
-
-        int ch = getch();
-
-        if (ch == ERR) {
-            continue;
-        }
-
-        if (ch == '\n') {
-            if (strcmp(input_buffer, "exit") == 0 || strcmp(input_buffer, "quit") == 0) {
-                is_running = false;
-            } else if (strcmp(input_buffer, "help") == 0) {
-                status = Help;
-            } else {
-                da_execute(console_win, input_buffer, &needs_redraw);
+        switch (status) {
+        case Typing:
+        case Editing:
+            draw_console_prompt(console_win, input_buffer, status); // has it's own refresh
+            int ch = getch();
+            if (ch == ERR) {
+                continue;
             }
-            input_len = 0;
-            input_buffer[0] = '\0';
-        } else if (status == Help) {
-            if (ch == 'q') {
+
+            if (ch == '\n') {
+                if (strcmp(input_buffer, "exit") == 0 || strcmp(input_buffer, "quit") == 0) {
+                    is_running = false;
+                } else if (strcmp(input_buffer, "help") == 0) {
+                    status = Help;
+                } else {
+                    da_execute(console_win, input_buffer, &needs_redraw);
+                }
+                input_len = 0;
+                input_buffer[0] = '\0';
+            } else if (ch == KEY_BACKSPACE || ch == 127) {
+                if (input_len > 0) {
+                    input_buffer[--input_len] = '\0';
+                }
+            } else if (ch >= 32 && ch <= 126) {
+                if (input_len < 255) {
+                    input_buffer[input_len++] = ch;
+                    input_buffer[input_len] = '\0';
+                }
+                // Editing mode
+            } else if (ch == '\t') {
+                status = Editing;
+                int entity_index = 0;
+                int relationship_index = 0;
+                bool switching_moving_type = true;
+
+                while (switching_moving_type) {
+                    int moving_type = getch();
+                    bool moving_relationship = false;
+                    bool moving_entity = false;
+                    moving = true;
+                    switch (moving_type) {
+                    case 'e':
+                        while (moving) {
+                            int move_key = getch();
+                            if (entity_index >= global_objects.entity_count) {
+                                entity_index = global_objects.entity_count % entity_index;
+                            }
+                            switch (move_key) {
+                            case KEY_UP:
+                                global_objects.entities[entity_index]->y -= 1;
+                                break;
+                            case KEY_DOWN:
+                                global_objects.entities[entity_index]->y += 1;
+                                break;
+                            case KEY_RIGHT:
+                                global_objects.entities[entity_index]->x += 1;
+                                break;
+                            case KEY_LEFT:
+                                global_objects.entities[entity_index]->x -= 1;
+                                break;
+                            case '\t':
+                                entity_index++;
+                                break;
+                            case 'q':
+                                moving = false;
+                                break;
+                            }
+                            erase();
+                            draw_all_relationships(global_objects, relationship_index, moving_relationship);
+                            draw_all_entities(global_objects, entity_index, moving);
+                            refresh();
+                            // TODO : implement a public API to choose whether to make call a draw
+                            //  help console or a command console func
+                            draw_console_prompt(console_win, input_buffer, status);
+                        }
+                        break;
+                    case 'r':
+                        while (moving) {
+                            int move_key = getch();
+                            if (relationship_index >= global_objects.relationship_count) {
+                                relationship_index = global_objects.relationship_count % relationship_index;
+                            }
+                            switch (move_key) {
+                            case KEY_UP:
+                                global_objects.relationships[relationship_index]->y -= 1;
+                                break;
+                            case KEY_DOWN:
+                                global_objects.relationships[relationship_index]->y += 1;
+                                break;
+                            case KEY_RIGHT:
+                                global_objects.relationships[relationship_index]->x += 1;
+                                break;
+                            case KEY_LEFT:
+                                global_objects.relationships[relationship_index]->x -= 1;
+                                break;
+                            case '\t':
+                                relationship_index++;
+                                break;
+                            case 'q':
+                                moving = false;
+                                break;
+                            }
+                            erase();
+                            draw_all_entities(global_objects, entity_index, moving_entity);
+                            draw_all_relationships(global_objects, relationship_index, moving);
+                            refresh();
+                            draw_console_prompt(console_win, input_buffer, status);
+                        }
+                        break;
+
+                    case 'x':
+                        switching_moving_type = false;
+                        status = Typing;
+                        break;
+                    }
+                }
+            }
+            break;
+        case Help:
+            draw_help_window(console_win, search_buffer, page, Action);
+            int wch = getch();
+
+            if (wch == ERR) {
+                continue;
+            }
+            if (wch == 'q') {
                 // revert changes
                 status = Typing;
                 int screen_height, screen_width;
@@ -106,30 +207,32 @@ int main() {
                 werase(console_win);
 
                 needs_redraw = true;
-            } else if (ch == 'm') {
+            } else if (wch == 'm') {
                 // TODO: why escape takes long here and in editing mode (replaced with q)
                 // This is for commands
                 // implement a search for command and highlight
                 page = Main;
-            } else if (ch == 'h') {
+                set_current_page(&hwin, page);
+            } else if (wch == 'h') {
                 page = Hotkeys;
-            } else if (ch == 'e') {
+                set_current_page(&hwin, page);
+            } else if (wch == 'e') {
                 page = Examples;
-            } else if (page == Main && ch == '/') {
-                is_searching = true;
-                while (is_searching) {
-                    draw_console_prompt(console_win, search_buffer, status, page, is_searching);
+                set_current_page(&hwin, page);
+            } else if (page == Main && wch == '/') {
+                Action = Search;
+                while (Action) {
+                    draw_help_window(console_win, search_buffer, page, Action);
                     int search_char = getch();
                     if (search_char == ERR) {
                         continue;
                     }
                     if (search_char == '\n') {
-                        __attribute__((weak)) void do_search(const char *search_buffer);
-                        do_search(search_buffer);
+                        // do_search(search_buffer);
                         search_len = 0;
                         search_buffer[0] = '\0';
                     } else if (search_char == 'q') {
-                        is_searching = false;
+                        Action = Navigation;
                         search_len = 0;
                         search_buffer[0] = '\0';
                     } else if (search_char == KEY_BACKSPACE || search_char == 127) {
@@ -142,103 +245,6 @@ int main() {
                             search_buffer[search_len] = '\0';
                         }
                     }
-                }
-            }
-        } else if (ch == KEY_BACKSPACE || ch == 127) {
-            if (input_len > 0) {
-                input_buffer[--input_len] = '\0';
-            }
-        } else if (ch >= 32 && ch <= 126) {
-            if (input_len < 255) {
-                input_buffer[input_len++] = ch;
-                input_buffer[input_len] = '\0';
-            }
-            // Editing mode
-        } else if (ch == '\t') {
-            status = Editing;
-            int entity_index = 0;
-            int relationship_index = 0;
-            bool switching_moving_type = true;
-
-            while (switching_moving_type) {
-                int moving_type = getch();
-                bool moving_relationship = false;
-                bool moving_entity = false;
-                moving = true;
-                switch (moving_type) {
-                case 'e':
-                    while (moving) {
-                        int move_key = getch();
-                        if (entity_index >= global_objects.entity_count) {
-                            entity_index = global_objects.entity_count % entity_index;
-                        }
-                        switch (move_key) {
-                        case KEY_UP:
-                            global_objects.entities[entity_index]->y -= 1;
-                            break;
-                        case KEY_DOWN:
-                            global_objects.entities[entity_index]->y += 1;
-                            break;
-                        case KEY_RIGHT:
-                            global_objects.entities[entity_index]->x += 1;
-                            break;
-                        case KEY_LEFT:
-                            global_objects.entities[entity_index]->x -= 1;
-                            break;
-                        case '\t':
-                            entity_index++;
-                            break;
-                        case 'q':
-                            moving = false;
-                            break;
-                        }
-                        erase();
-                        draw_all_relationships(global_objects, relationship_index, moving_relationship);
-                        draw_all_entities(global_objects, entity_index, moving);
-                        refresh();
-                        // TODO : implement a public API to choose whether to make call a draw
-                        //  help console or a command console func
-                        draw_console_prompt(console_win, input_buffer, status, page, is_searching);
-                    }
-                    break;
-                case 'r':
-                    while (moving) {
-                        int move_key = getch();
-                        if (relationship_index >= global_objects.relationship_count) {
-                            relationship_index = global_objects.relationship_count % relationship_index;
-                        }
-                        switch (move_key) {
-                        case KEY_UP:
-                            global_objects.relationships[relationship_index]->y -= 1;
-                            break;
-                        case KEY_DOWN:
-                            global_objects.relationships[relationship_index]->y += 1;
-                            break;
-                        case KEY_RIGHT:
-                            global_objects.relationships[relationship_index]->x += 1;
-                            break;
-                        case KEY_LEFT:
-                            global_objects.relationships[relationship_index]->x -= 1;
-                            break;
-                        case '\t':
-                            relationship_index++;
-                            break;
-                        case 'q':
-                            moving = false;
-                            break;
-                        }
-                        erase();
-                        draw_all_entities(global_objects, entity_index, moving_entity);
-                        draw_all_relationships(global_objects, relationship_index, moving);
-                        refresh();
-                        draw_console_prompt(console_win, input_buffer, status, page, is_searching);
-                    }
-                    break;
-
-                case 'x':
-                    switching_moving_type = false;
-                    status = Typing;
-                    break;
                 }
             }
         }

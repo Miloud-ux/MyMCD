@@ -351,7 +351,7 @@ WINDOW *create_console_window() {
     return console_win;
 }
 
-void draw_console_prompt(WINDOW *console_win, const char *input, status status, HelpPage page, bool is_searching) {
+void draw_console_prompt(WINDOW *console_win, const char *input, status status) {
     int win_height = getmaxy(console_win);
     int win_width = getmaxx(console_win);
 
@@ -390,120 +390,123 @@ void draw_console_prompt(WINDOW *console_win, const char *input, status status, 
         wattroff(console_win, A_BOLD);
 
         wrefresh(console_win);
+    }
+}
 
-    } else if (status == Help) {
-        int h = HELP_WIN_HEIGHT;
-        int w = HELP_WIN_WIDTH;
+void draw_help_window(WINDOW *win, const char *search_buffer, HelpPage page, HelpAction Action) {
+    int std_screen_width, std_screen_height;
+    getmaxyx(stdscr, std_screen_height, std_screen_width);
+    int h = HELP_WIN_HEIGHT;
+    int w = HELP_WIN_WIDTH;
 
-        if (h >= std_screen_height - 2)
-            h = std_screen_height - 2;
-        if (w >= std_screen_width - 2)
-            w = std_screen_width - 2;
+    if (h >= std_screen_height - 2)
+        h = std_screen_height - 2;
+    if (w >= std_screen_width - 2)
+        w = std_screen_width - 2;
 
-        int center_y = (std_screen_height - h) / 2;
-        int center_x = (std_screen_width - w) / 2;
+    int center_y = (std_screen_height - h) / 2;
+    int center_x = (std_screen_width - w) / 2;
 
-        wresize(console_win, h, w);
-        mvwin(console_win, center_y, center_x);
+    wresize(win, h, w);
+    mvwin(win, center_y, center_x);
 
-        werase(console_win);
-        box(console_win, 0, 0);
+    werase(win);
+    box(win, 0, 0);
 
-        // header
-        wattron(console_win, COLOR_PAIR(6) | A_BOLD | A_REVERSE);
-        mvwprintw(console_win, 1, (w / 2) - 4, "  HELP  ");
-        wattroff(console_win, COLOR_PAIR(6) | A_BOLD | A_REVERSE);
-        wattron(console_win, COLOR_PAIR(7) | A_BOLD);
-        mvwprintw(console_win, h - 2, (w / 2) - 11, "Press 'q' to exit");
-        wattroff(console_win, COLOR_PAIR(7) | A_BOLD);
+    // header
+    wattron(win, COLOR_PAIR(6) | A_BOLD | A_REVERSE);
+    mvwprintw(win, 1, (w / 2) - 4, "  HELP  ");
+    wattroff(win, COLOR_PAIR(6) | A_BOLD | A_REVERSE);
+    wattron(win, COLOR_PAIR(7) | A_BOLD);
+    mvwprintw(win, h - 2, (w / 2) - 11, "Press 'q' to exit");
+    wattroff(win, COLOR_PAIR(7) | A_BOLD);
 
-        switch (page) {
-        case Main:
-            // section: Syntax
-            wattron(console_win, COLOR_PAIR(6) | A_BOLD | A_UNDERLINE);
-            mvwprintw(console_win, 4, 4, "COMMANDS");
-            wattroff(console_win, COLOR_PAIR(6) | A_BOLD | A_UNDERLINE);
+    switch (page) {
+    case Main:
+        // section: Syntax
+        wattron(win, COLOR_PAIR(6) | A_BOLD | A_UNDERLINE);
+        mvwprintw(win, 4, 4, "COMMANDS");
+        wattroff(win, COLOR_PAIR(6) | A_BOLD | A_UNDERLINE);
 
-            // item 1
-            mvwprintw(console_win, 6, 6, ">> ");
-            wattron(console_win, A_BOLD);
-            waddstr(console_win, "create entity ");
-            wattroff(console_win, A_BOLD);
-            wattron(console_win, A_DIM);
-            waddstr(console_win, "\"e_name\"");
-            wattroff(console_win, A_DIM);
+        // item 1
+        mvwprintw(win, 6, 6, ">> ");
+        wattron(win, A_BOLD);
+        waddstr(win, "create entity ");
+        wattroff(win, A_BOLD);
+        wattron(win, A_DIM);
+        waddstr(win, "\"e_name\"");
+        wattroff(win, A_DIM);
 
-            // item 2
-            mvwprintw(console_win, 7, 6, ">> ");
-            wattron(console_win, A_BOLD);
-            waddstr(console_win, "create relationship ");
-            wattroff(console_win, A_BOLD);
-            wattron(console_win, A_DIM);
-            waddstr(console_win, "\"r_name\" \"e1_name \"\"e2_name\"");
-            wattroff(console_win, A_DIM);
+        // item 2
+        mvwprintw(win, 7, 6, ">> ");
+        wattron(win, A_BOLD);
+        waddstr(win, "create relationship ");
+        wattroff(win, A_BOLD);
+        wattron(win, A_DIM);
+        waddstr(win, "\"r_name\" \"e1_name \"\"e2_name\"");
+        wattroff(win, A_DIM);
 
-            // item 3
-            mvwprintw(console_win, 8, 6, ">> ");
-            wattron(console_win, A_BOLD);
-            waddstr(console_win, "add property ");
-            wattroff(console_win, A_BOLD);
-            wattron(console_win, A_DIM);
-            waddstr(console_win, "\"target\" \"prop\" type");
-            wattroff(console_win, A_DIM);
+        // item 3
+        mvwprintw(win, 8, 6, ">> ");
+        wattron(win, A_BOLD);
+        waddstr(win, "add property ");
+        wattroff(win, A_BOLD);
+        wattron(win, A_DIM);
+        waddstr(win, "\"target\" \"prop\" type");
+        wattroff(win, A_DIM);
 
-            wattron(console_win, COLOR_PAIR(3) | A_BOLD | A_UNDERLINE);
-            mvwprintw(console_win, 10, 4, "Note:");
-            wattroff(console_win, COLOR_PAIR(3) | A_BOLD | A_UNDERLINE);
+        wattron(win, COLOR_PAIR(3) | A_BOLD | A_UNDERLINE);
+        mvwprintw(win, 10, 4, "Note:");
+        wattroff(win, COLOR_PAIR(3) | A_BOLD | A_UNDERLINE);
 
-            mvwprintw(console_win, 11, 4, "You Must use quotations either double or single.");
+        mvwprintw(win, 11, 4, "You Must use quotations either double or single.");
 
-            wattron(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
-            mvwprintw(console_win, h - 2, 2, "Press 'h' for hotkeys");
-            mvwprintw(console_win, h - 2, w - 24, "Press 'e' for examples");
-            wattroff(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        wattron(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        mvwprintw(win, h - 2, 2, "Press 'h' for hotkeys");
+        mvwprintw(win, h - 2, w - 24, "Press 'e' for examples");
+        wattroff(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
 
-            if (is_searching) {
-                wmove(console_win, h - 2, 1);
-                wclrtoeol(console_win);
-                wmove(console_win, h - 3, 1);
-                whline(console_win, ACS_HLINE, w);
-                mvwprintw(console_win, h - 2, 2, "/%s", input);
-            }
-
-            break;
-        case Hotkeys:
-            wattron(console_win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
-            mvwprintw(console_win, 4, 4, "HOTKEYS & NAVIGATION");
-            wattroff(console_win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
-
-            int hy = 6;
-            mvwprintw(console_win, hy++, 6, "[TAB]      Enter General Edit Mode");
-            mvwprintw(console_win, hy++, 6, "[e]        Move Entities (use Arrow Keys)");
-            mvwprintw(console_win, hy++, 6, "[r]        Move Relationships");
-            mvwprintw(console_win, hy++, 6, "[q]        Back to General Edit / Exit Page");
-            mvwprintw(console_win, hy++, 6, "[x]        Quit Movement Mode");
-
-            wattron(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
-            mvwprintw(console_win, h - 2, 2, "Press 'e' for examples");
-            mvwprintw(console_win, h - 2, w - 29, "Press 'm' back to main help");
-            wattroff(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
-            break;
-
-        case Examples:
-            mvwprintw(console_win, 6, 6, "Examples coming soon...");
-
-            wattron(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
-            mvwprintw(console_win, h - 2, 2, "Press 'h' for hotkeys");
-            mvwprintw(console_win, h - 2, w - 29, "Press 'm' back to main help");
-            wattroff(console_win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
-            break;
-
-        default:
-            break;
+        if (Action) {
+            wmove(win, h - 2, 1);
+            wclrtoeol(win);
+            wmove(win, h - 3, 1);
+            whline(win, ACS_HLINE, w);
+            mvwprintw(win, h - 2, 2, "/%s", search_buffer);
         }
 
-        wrefresh(console_win);
+        break;
+    case Hotkeys:
+        wattron(win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
+        mvwprintw(win, 4, 4, "HOTKEYS & NAVIGATION");
+        wattroff(win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
+
+        int hy = 6;
+        mvwprintw(win, hy++, 6, "[TAB]      Enter General Edit Mode");
+        mvwprintw(win, hy++, 6, "[e]        Move Entities (use Arrow Keys)");
+        mvwprintw(win, hy++, 6, "[r]        Move Relationships");
+        mvwprintw(win, hy++, 6, "[q]        Back to General Edit / Exit Page");
+        mvwprintw(win, hy++, 6, "[x]        Quit Movement Mode");
+
+        wattron(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        mvwprintw(win, h - 2, 2, "Press 'e' for examples");
+        mvwprintw(win, h - 2, w - 29, "Press 'm' back to main help");
+        wattroff(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        break;
+
+    case Examples:
+        mvwprintw(win, 6, 6, "Examples coming soon...");
+
+        wattron(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        mvwprintw(win, h - 2, 2, "Press 'h' for hotkeys");
+        mvwprintw(win, h - 2, w - 29, "Press 'm' back to main help");
+        wattroff(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        break;
+
+    default:
+        break;
     }
+
+    wrefresh(win);
 }
 
 void draw_all_entities(GlobalObjects global_objects, int moving_index, bool is_moving) {
@@ -538,4 +541,14 @@ void draw_all_relationships(GlobalObjects global_objects, int moving_index, bool
             }
         }
     }
+}
+
+void draw_all_and_refresh(int screen_width, bool *moving, bool *needs_redraw) {
+    moving = false;
+    erase();
+    mvprintw(0, screen_width / 2 - 10, "MCD Tool - Type 'help' for commands");
+    draw_all_entities(global_objects, 0, moving);
+    draw_all_relationships(global_objects, 0, moving);
+    refresh();
+    needs_redraw = false;
 }
