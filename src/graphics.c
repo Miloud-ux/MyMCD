@@ -397,6 +397,7 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
                       WINDOW *scrolling_pad) {
     int std_screen_width, std_screen_height;
     getmaxyx(stdscr, std_screen_height, std_screen_width);
+
     int h = HELP_WIN_HEIGHT;
     int w = HELP_WIN_WIDTH;
 
@@ -407,83 +408,48 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
 
     int help_win_y = (std_screen_height - h) / 2;
     int help_win_x = (std_screen_width - w) / 2;
-    int top_visible_line = 0;
 
     wresize(win, h, w);
     mvwin(win, help_win_y, help_win_x);
-
     werase(win);
     box(win, 0, 0);
 
-    // header
+    // Header
     wattron(win, COLOR_PAIR(6) | A_BOLD | A_REVERSE);
     mvwprintw(win, 1, (w / 2) - 4, "  HELP  ");
     wattroff(win, COLOR_PAIR(6) | A_BOLD | A_REVERSE);
-    wattron(win, COLOR_PAIR(7) | A_BOLD);
-    mvwprintw(win, h - 2, (w / 2) - 11, "Press 'q' to exit");
-    wattroff(win, COLOR_PAIR(7) | A_BOLD);
 
-    wrefresh(win);
-    switch (page) {
-    case Main:
+    // Pad coords
+    int sminrow = help_win_y + 2;     // Start rendering below top border and header
+    int smincol = help_win_x + 2;     // Leave a 1-char margin inside left border
+    int smaxcol = help_win_x + w - 3; // Stop a 1-char margin inside right border
+    int smaxrow = help_win_y + h - 2; // Default bottom limit
 
-        // Draw the text
-        //
-        // for (size_t l = 0; l < hwin->pages_db[page].line_count; l++) {
-        //     HelpLine *current_line = (HelpLine *)&hwin->pages_db[page].lines[l];
-        //     if (current_line->text != NULL) {
-        //         // print at the l's line and first column
-        //         mvwprintw(win, current_line->line_start, 2, "%s", current_line->text);
-        //     }
-        // }
+    if (Action) {
+        wmove(win, h - 2, 1);
+        wclrtoeol(win);
+        wmove(win, h - 3, 1);
+        whline(win, ACS_HLINE, w - 2); // w-2 so it doesn't break the vertical borders
+        mvwprintw(win, h - 2, 1, "/%s", search_buffer);
 
-        // If the user is searching
-        if (Action) {
-            wmove(win, h - 2, 1);
-            wclrtoeol(win);
-            wmove(win, h - 3, 1);
-            whline(win, ACS_HLINE, w);
-            mvwprintw(win, h - 2, 2, "/%s", search_buffer);
-        }
-
-        break;
-    case Hotkeys:
-        //       for (size_t l = 0; l < hwin->pages_db[page].line_count; l++) {
-        //     HelpLine *current_line = (HelpLine *)&hwin->pages_db[page].lines[l];
-        //     if (current_line->text != NULL) {
-        //         // print at the l's line and first column
-        //         mvwprintw(win, (current_line->line_start) % MAX_LINES_PER_PAGE + 1, 2, "%s", current_line->text);
-        //     }
-        // }
-        //
-
-        top_visible_line = 20;
-
-        break;
-    case Examples:
-        // wattron(win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
-        // mvwprintw(win, 4, 6, "Examples");
-        // wattroff(win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
-        // mvwprintw(win, 6, 6, "Examples coming soon...");
-        //
-        // wattron(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
-        // mvwprintw(win, h - 2, 2, "Press 'h' for hotkeys");
-        // mvwprintw(win, h - 2, w - 29, "Press 'm' back to main help");
-        // wattroff(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
-
-        // for (size_t l = 0; l < hwin->pages_db[page].line_count; l++) {
-        //     HelpLine *current_line = (HelpLine *)&hwin->pages_db[page].lines[l];
-        //     if (current_line->text != NULL) {
-        //         // print at the l's line and first column
-        //         mvwprintw(win, (current_line->line_start) % MAX_LINES_PER_PAGE + 1, 2, "%s", current_line->text);
-        //     }
-        // }
-
-        top_visible_line = 40;
-        break;
+        // shringing the pad's rendering area so it doesn't overwrite the search bar
+        smaxrow = help_win_y + h - 4;
     }
 
-    prefresh(scrolling_pad, top_visible_line, 0, help_win_y, help_win_x, help_win_y + h, help_win_x + w);
+    wrefresh(win);
+
+    int top_visible_line_per_help_page = 0;
+    switch (page) {
+    case Main:
+        prefresh(scrolling_pad, 0 + hwin->main_scrolling_line, 0, sminrow, smincol, smaxrow, smaxcol);
+        break;
+    case Hotkeys:
+        prefresh(scrolling_pad, PAD_OFFSET + hwin->hotkey_scrolling_line, 0, sminrow, smincol, smaxrow, smaxcol);
+        break;
+    case Examples:
+        prefresh(scrolling_pad, (PAD_OFFSET * 2) + hwin->examples_scrolling_line, 0, sminrow, smincol, smaxrow, smaxcol);
+        break;
+    }
 }
 
 void draw_all_entities(GlobalObjects global_objects, int moving_index, bool is_moving) {

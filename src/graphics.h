@@ -9,11 +9,11 @@
 //  Windows and scrolling pad
 #define CONSOLE_HEIGHT 6 // console_win width = stdscr width
 #define HELP_WIN_HEIGHT 22
-#define HELP_WIN_WIDTH 80
+#define HELP_WIN_WIDTH 82
 #define PAD_LINES 60
 #define PAD_COLS 78
 #define PAD_VIEW_WINDOW 20
-#define PAD_OFFSET 20
+#define PAD_OFFSET 17
 // Used to traverse to the desired HelpPage ie: Main:0, Examples: Example_line = PAD_OFFSET*Main_line
 
 typedef enum status { Typing, Editing, Help } status;
