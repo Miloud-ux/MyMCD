@@ -40,6 +40,6 @@ void draw_all_and_refresh(int screen_width, bool *moving, bool *needs_redraw);
 
 WINDOW *create_console_window();
 void draw_console_prompt(WINDOW *console_win, const char *input, status status);
-void draw_help_window(WINDOW *win, const char *search_buffer, HelpPage page, HelpAction Action);
+void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, HelpPage page, HelpAction Action);
 
 #endif

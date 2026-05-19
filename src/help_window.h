@@ -18,10 +18,17 @@
 #define HELP_WIN_HEIGHT 22
 #define HELP_WIN_WIDTH 80
 
-#define MAX_LINES_PER_PAGE 3
-#define MAX_DIALOGE_LEN 80 // equal to the width of the help window
-#define MAX_TOKENS_PER_LINE 40
+#define MAX_LINES_PER_PAGE 20
+#define MAX_DIALOGE_LEN 78 // equal to the width of the help window - 2
+#define MAX_TOKENS_PER_LINE 80
 
+typedef enum LineType {
+    p,    // regular text
+    h,    // only for the first scroll ( top most title )
+    h1,   //  HTML like
+    hint, // hint the bottom most text ie: press e to go to examples...etc
+    code  // for showcasing commands like : create
+} LineType;
 typedef enum HelpPage { Main, Hotkeys, Examples, HelpPageNum } HelpPage;
 typedef enum HelpAction {
     Navigation, // Defaults to 0
@@ -34,6 +41,10 @@ typedef struct HelpLine {
         const char *text;
         Token tokens[MAX_TOKENS_PER_LINE];
         size_t token_count;
+        size_t line_len; // equal to the pos of the last token
+        LineType type;
+        int line_start; // position on the page
+
 } HelpLine;
 
 typedef struct HelpPageData {

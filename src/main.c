@@ -188,12 +188,13 @@ int main() {
             }
             break;
         case Help:
-            draw_help_window(console_win, search_buffer, page, Action);
+            set_current_page(&hwin, page);
+            draw_help_window(console_win, &hwin, search_buffer, page, Action);
             int wch = getch();
-
             if (wch == ERR) {
                 continue;
             }
+
             if (wch == 'q') {
                 // revert changes
                 status = Typing;
@@ -212,17 +213,14 @@ int main() {
                 // This is for commands
                 // implement a search for command and highlight
                 page = Main;
-                set_current_page(&hwin, page);
             } else if (wch == 'h') {
                 page = Hotkeys;
-                set_current_page(&hwin, page);
             } else if (wch == 'e') {
                 page = Examples;
-                set_current_page(&hwin, page);
             } else if (page == Main && wch == '/') {
                 Action = Search;
                 while (Action) {
-                    draw_help_window(console_win, search_buffer, page, Action);
+                    draw_help_window(console_win, &hwin, search_buffer, page, Action);
                     int search_char = getch();
                     if (search_char == ERR) {
                         continue;
@@ -247,6 +245,7 @@ int main() {
                     }
                 }
             }
+            break;
         }
     }
     delwin(console_win);

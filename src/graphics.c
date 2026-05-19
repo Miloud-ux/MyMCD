@@ -393,7 +393,7 @@ void draw_console_prompt(WINDOW *console_win, const char *input, status status) 
     }
 }
 
-void draw_help_window(WINDOW *win, const char *search_buffer, HelpPage page, HelpAction Action) {
+void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, HelpPage page, HelpAction Action) {
     int std_screen_width, std_screen_height;
     getmaxyx(stdscr, std_screen_height, std_screen_width);
     int h = HELP_WIN_HEIGHT;
@@ -423,49 +423,19 @@ void draw_help_window(WINDOW *win, const char *search_buffer, HelpPage page, Hel
 
     switch (page) {
     case Main:
-        // section: Syntax
-        wattron(win, COLOR_PAIR(6) | A_BOLD | A_UNDERLINE);
-        mvwprintw(win, 4, 4, "COMMANDS");
-        wattroff(win, COLOR_PAIR(6) | A_BOLD | A_UNDERLINE);
 
-        // item 1
-        mvwprintw(win, 6, 6, ">> ");
-        wattron(win, A_BOLD);
-        waddstr(win, "create entity ");
-        wattroff(win, A_BOLD);
-        wattron(win, A_DIM);
-        waddstr(win, "\"e_name\"");
-        wattroff(win, A_DIM);
+        // Draw the text
+        // int top_visible_line_idx =  MAX_LINES_PER_PAGE - curr_line_idx;
 
-        // item 2
-        mvwprintw(win, 7, 6, ">> ");
-        wattron(win, A_BOLD);
-        waddstr(win, "create relationship ");
-        wattroff(win, A_BOLD);
-        wattron(win, A_DIM);
-        waddstr(win, "\"r_name\" \"e1_name \"\"e2_name\"");
-        wattroff(win, A_DIM);
+        for (size_t l = 0; l < hwin->pages_db[page].line_count; l++) {
+            HelpLine *current_line = (HelpLine *)&hwin->pages_db[page].lines[l];
+            if (current_line->text != NULL) {
+                // print at the l's line and first column
+                mvwprintw(win, current_line->line_start, 2, "%s", current_line->text);
+            }
+        }
 
-        // item 3
-        mvwprintw(win, 8, 6, ">> ");
-        wattron(win, A_BOLD);
-        waddstr(win, "add property ");
-        wattroff(win, A_BOLD);
-        wattron(win, A_DIM);
-        waddstr(win, "\"target\" \"prop\" type");
-        wattroff(win, A_DIM);
-
-        wattron(win, COLOR_PAIR(3) | A_BOLD | A_UNDERLINE);
-        mvwprintw(win, 10, 4, "Note:");
-        wattroff(win, COLOR_PAIR(3) | A_BOLD | A_UNDERLINE);
-
-        mvwprintw(win, 11, 4, "You Must use quotations either double or single.");
-
-        wattron(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
-        mvwprintw(win, h - 2, 2, "Press 'h' for hotkeys");
-        mvwprintw(win, h - 2, w - 24, "Press 'e' for examples");
-        wattroff(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
-
+        // If the user is searching
         if (Action) {
             wmove(win, h - 2, 1);
             wclrtoeol(win);
@@ -476,36 +446,50 @@ void draw_help_window(WINDOW *win, const char *search_buffer, HelpPage page, Hel
 
         break;
     case Hotkeys:
-        wattron(win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
-        mvwprintw(win, 4, 4, "HOTKEYS & NAVIGATION");
-        wattroff(win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
+        // wattron(win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
+        // mvwprintw(win, 4, 4, "HOTKEYS & NAVIGATION");
+        // wattroff(win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
+        //
+        // int hy = 6;
+        // mvwprintw(win, hy++, 6, "[TAB]      Enter General Edit Mode");
+        // mvwprintw(win, hy++, 6, "[e]        Move Entities (use Arrow Keys)");
+        // mvwprintw(win, hy++, 6, "[r]        Move Relationships");
+        // mvwprintw(win, hy++, 6, "[q]        Back to General Edit / Exit Page");
+        // mvwprintw(win, hy++, 6, "[x]        Quit Movement Mode");
+        //
+        // wattron(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        // mvwprintw(win, h - 2, 2, "Press 'e' for examples");
+        // mvwprintw(win, h - 2, w - 29, "Press 'm' back to main help");
+        // wattroff(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
 
-        int hy = 6;
-        mvwprintw(win, hy++, 6, "[TAB]      Enter General Edit Mode");
-        mvwprintw(win, hy++, 6, "[e]        Move Entities (use Arrow Keys)");
-        mvwprintw(win, hy++, 6, "[r]        Move Relationships");
-        mvwprintw(win, hy++, 6, "[q]        Back to General Edit / Exit Page");
-        mvwprintw(win, hy++, 6, "[x]        Quit Movement Mode");
-
-        wattron(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
-        mvwprintw(win, h - 2, 2, "Press 'e' for examples");
-        mvwprintw(win, h - 2, w - 29, "Press 'm' back to main help");
-        wattroff(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        for (size_t l = 0; l < hwin->pages_db[page].line_count; l++) {
+            HelpLine *current_line = (HelpLine *)&hwin->pages_db[page].lines[l];
+            if (current_line->text != NULL) {
+                // print at the l's line and first column
+                mvwprintw(win, (current_line->line_start) % MAX_LINES_PER_PAGE + 1, 2, "%s", current_line->text);
+            }
+        }
         break;
-
     case Examples:
-        mvwprintw(win, 6, 6, "Examples coming soon...");
+        // wattron(win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
+        // mvwprintw(win, 4, 6, "Examples");
+        // wattroff(win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
+        // mvwprintw(win, 6, 6, "Examples coming soon...");
+        //
+        // wattron(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        // mvwprintw(win, h - 2, 2, "Press 'h' for hotkeys");
+        // mvwprintw(win, h - 2, w - 29, "Press 'm' back to main help");
+        // wattroff(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
+        for (size_t l = 0; l < hwin->pages_db[page].line_count; l++) {
+            HelpLine *current_line = (HelpLine *)&hwin->pages_db[page].lines[l];
+            if (current_line->text != NULL) {
+                // print at the l's line and first column
+                mvwprintw(win, (current_line->line_start) % MAX_LINES_PER_PAGE + 1, 2, "%s", current_line->text);
+            }
+        }
 
-        wattron(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
-        mvwprintw(win, h - 2, 2, "Press 'h' for hotkeys");
-        mvwprintw(win, h - 2, w - 29, "Press 'm' back to main help");
-        wattroff(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
-        break;
-
-    default:
         break;
     }
-
     wrefresh(win);
 }
 
@@ -550,5 +534,5 @@ void draw_all_and_refresh(int screen_width, bool *moving, bool *needs_redraw) {
     draw_all_entities(global_objects, 0, moving);
     draw_all_relationships(global_objects, 0, moving);
     refresh();
-    needs_redraw = false;
+    *needs_redraw = false;
 }
