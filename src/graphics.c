@@ -393,7 +393,8 @@ void draw_console_prompt(WINDOW *console_win, const char *input, status status) 
     }
 }
 
-void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, HelpPage page, HelpAction Action) {
+void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, HelpPage page, HelpAction Action,
+                      WINDOW *scrolling_pad) {
     int std_screen_width, std_screen_height;
     getmaxyx(stdscr, std_screen_height, std_screen_width);
     int h = HELP_WIN_HEIGHT;
@@ -404,11 +405,12 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
     if (w >= std_screen_width - 2)
         w = std_screen_width - 2;
 
-    int center_y = (std_screen_height - h) / 2;
-    int center_x = (std_screen_width - w) / 2;
+    int help_win_y = (std_screen_height - h) / 2;
+    int help_win_x = (std_screen_width - w) / 2;
+    int top_visible_line = 0;
 
     wresize(win, h, w);
-    mvwin(win, center_y, center_x);
+    mvwin(win, help_win_y, help_win_x);
 
     werase(win);
     box(win, 0, 0);
@@ -421,19 +423,19 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
     mvwprintw(win, h - 2, (w / 2) - 11, "Press 'q' to exit");
     wattroff(win, COLOR_PAIR(7) | A_BOLD);
 
+    wrefresh(win);
     switch (page) {
     case Main:
 
         // Draw the text
-        // int top_visible_line_idx =  MAX_LINES_PER_PAGE - curr_line_idx;
-
-        for (size_t l = 0; l < hwin->pages_db[page].line_count; l++) {
-            HelpLine *current_line = (HelpLine *)&hwin->pages_db[page].lines[l];
-            if (current_line->text != NULL) {
-                // print at the l's line and first column
-                mvwprintw(win, current_line->line_start, 2, "%s", current_line->text);
-            }
-        }
+        //
+        // for (size_t l = 0; l < hwin->pages_db[page].line_count; l++) {
+        //     HelpLine *current_line = (HelpLine *)&hwin->pages_db[page].lines[l];
+        //     if (current_line->text != NULL) {
+        //         // print at the l's line and first column
+        //         mvwprintw(win, current_line->line_start, 2, "%s", current_line->text);
+        //     }
+        // }
 
         // If the user is searching
         if (Action) {
@@ -446,29 +448,17 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
 
         break;
     case Hotkeys:
-        // wattron(win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
-        // mvwprintw(win, 4, 4, "HOTKEYS & NAVIGATION");
-        // wattroff(win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
+        //       for (size_t l = 0; l < hwin->pages_db[page].line_count; l++) {
+        //     HelpLine *current_line = (HelpLine *)&hwin->pages_db[page].lines[l];
+        //     if (current_line->text != NULL) {
+        //         // print at the l's line and first column
+        //         mvwprintw(win, (current_line->line_start) % MAX_LINES_PER_PAGE + 1, 2, "%s", current_line->text);
+        //     }
+        // }
         //
-        // int hy = 6;
-        // mvwprintw(win, hy++, 6, "[TAB]      Enter General Edit Mode");
-        // mvwprintw(win, hy++, 6, "[e]        Move Entities (use Arrow Keys)");
-        // mvwprintw(win, hy++, 6, "[r]        Move Relationships");
-        // mvwprintw(win, hy++, 6, "[q]        Back to General Edit / Exit Page");
-        // mvwprintw(win, hy++, 6, "[x]        Quit Movement Mode");
-        //
-        // wattron(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
-        // mvwprintw(win, h - 2, 2, "Press 'e' for examples");
-        // mvwprintw(win, h - 2, w - 29, "Press 'm' back to main help");
-        // wattroff(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
 
-        for (size_t l = 0; l < hwin->pages_db[page].line_count; l++) {
-            HelpLine *current_line = (HelpLine *)&hwin->pages_db[page].lines[l];
-            if (current_line->text != NULL) {
-                // print at the l's line and first column
-                mvwprintw(win, (current_line->line_start) % MAX_LINES_PER_PAGE + 1, 2, "%s", current_line->text);
-            }
-        }
+        top_visible_line = 20;
+
         break;
     case Examples:
         // wattron(win, COLOR_PAIR(4) | A_BOLD | A_UNDERLINE);
@@ -480,17 +470,20 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
         // mvwprintw(win, h - 2, 2, "Press 'h' for hotkeys");
         // mvwprintw(win, h - 2, w - 29, "Press 'm' back to main help");
         // wattroff(win, COLOR_PAIR(7) | A_BOLD | A_REVERSE);
-        for (size_t l = 0; l < hwin->pages_db[page].line_count; l++) {
-            HelpLine *current_line = (HelpLine *)&hwin->pages_db[page].lines[l];
-            if (current_line->text != NULL) {
-                // print at the l's line and first column
-                mvwprintw(win, (current_line->line_start) % MAX_LINES_PER_PAGE + 1, 2, "%s", current_line->text);
-            }
-        }
 
+        // for (size_t l = 0; l < hwin->pages_db[page].line_count; l++) {
+        //     HelpLine *current_line = (HelpLine *)&hwin->pages_db[page].lines[l];
+        //     if (current_line->text != NULL) {
+        //         // print at the l's line and first column
+        //         mvwprintw(win, (current_line->line_start) % MAX_LINES_PER_PAGE + 1, 2, "%s", current_line->text);
+        //     }
+        // }
+
+        top_visible_line = 40;
         break;
     }
-    wrefresh(win);
+
+    prefresh(scrolling_pad, top_visible_line, 0, help_win_y, help_win_x, help_win_y + h, help_win_x + w);
 }
 
 void draw_all_entities(GlobalObjects global_objects, int moving_index, bool is_moving) {
@@ -535,4 +528,23 @@ void draw_all_and_refresh(int screen_width, bool *moving, bool *needs_redraw) {
     draw_all_relationships(global_objects, 0, moving);
     refresh();
     *needs_redraw = false;
+}
+
+WINDOW *init_pad(int num_lines, int num_col, HelpWindow hwin) {
+    WINDOW *pad = newpad(num_lines, num_col);
+    if (!pad)
+        return NULL;
+
+    // Write all lines to the pad
+
+    for (int p = 0; p < HelpPageNum; p++) {
+        for (size_t l = 0; l < hwin.pages_db[p].line_count; l++) {
+            HelpLine *current_line = (HelpLine *)&hwin.pages_db[p].lines[l];
+            if (current_line->text != NULL) {
+                mvwprintw(pad, current_line->line_start, 2, "%s", current_line->text);
+            }
+        }
+    }
+
+    return pad;
 }

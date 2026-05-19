@@ -6,7 +6,16 @@
 #include "help_window.h"
 #include <ncurses.h>
 
-#define CONSOLE_HEIGHT 6
+//  Windows and scrolling pad
+#define CONSOLE_HEIGHT 6 // console_win width = stdscr width
+#define HELP_WIN_HEIGHT 22
+#define HELP_WIN_WIDTH 80
+#define PAD_LINES 60
+#define PAD_COLS 78
+#define PAD_VIEW_WINDOW 20
+#define PAD_OFFSET 20
+// Used to traverse to the desired HelpPage ie: Main:0, Examples: Example_line = PAD_OFFSET*Main_line
+
 typedef enum status { Typing, Editing, Help } status;
 
 /* Main: Default halp page ie:  basic commands
@@ -40,6 +49,10 @@ void draw_all_and_refresh(int screen_width, bool *moving, bool *needs_redraw);
 
 WINDOW *create_console_window();
 void draw_console_prompt(WINDOW *console_win, const char *input, status status);
-void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, HelpPage page, HelpAction Action);
+void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, HelpPage page, HelpAction Action,
+                      WINDOW *scrolling_pad);
+
+// Pad control (used for scrolling)
+WINDOW *init_pad(int num_lines, int num_col, HelpWindow hwin);
 
 #endif

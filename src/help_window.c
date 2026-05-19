@@ -108,8 +108,9 @@ static HelpPageData helpdb[HelpPageNum] =
                     .type = hint}},
          .line_count = 20}};
 
+// Functions
+
 void init_help_window(HelpWindow *win, HelpPage current_page) {
-    win->top_visible_line = 0;
     win->current_page = current_page;
     win->pages_db = helpdb;
 

@@ -15,9 +15,6 @@
 #include "Lexer/tokenize.h"
 #include <stddef.h>
 
-#define HELP_WIN_HEIGHT 22
-#define HELP_WIN_WIDTH 80
-
 #define MAX_LINES_PER_PAGE 20
 #define MAX_DIALOGE_LEN 78 // equal to the width of the help window - 2
 #define MAX_TOKENS_PER_LINE 80
@@ -54,7 +51,6 @@ typedef struct HelpPageData {
 
 typedef struct HelpWindow {
         HelpPage current_page;
-        int top_visible_line; // for scrolling
         const HelpPageData *pages_db;
 } HelpWindow;
 

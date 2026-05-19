@@ -46,6 +46,14 @@ int main() {
     int search_len = 0;
     HelpAction Action = Navigation;
 
+    // Stdscreen info
+    int std_screen_width, std_screen_height;
+    getmaxyx(stdscr, std_screen_height, std_screen_width);
+
+    // Help window info
+    int center_y = (std_screen_height - HELP_WIN_HEIGHT) / 2;
+    int center_x = (std_screen_width - HELP_WIN_WIDTH) / 2;
+
     // init console_win
     bool moving = false;
     status status = Typing;
@@ -55,6 +63,10 @@ int main() {
     HelpWindow hwin;
     init_help_window(&hwin, Main);
 
+    // init scrolling pad
+    WINDOW *scrolling_pad = init_pad(PAD_LINES, PAD_COLS, hwin);
+
+    // Drawing
     erase();
     draw_all_entities(global_objects, 0, moving);
     draw_all_relationships(global_objects, 0, moving);
@@ -189,7 +201,7 @@ int main() {
             break;
         case Help:
             set_current_page(&hwin, page);
-            draw_help_window(console_win, &hwin, search_buffer, page, Action);
+            draw_help_window(console_win, &hwin, search_buffer, page, Action, scrolling_pad);
             int wch = getch();
             if (wch == ERR) {
                 continue;
@@ -220,7 +232,7 @@ int main() {
             } else if (page == Main && wch == '/') {
                 Action = Search;
                 while (Action) {
-                    draw_help_window(console_win, &hwin, search_buffer, page, Action);
+                    draw_help_window(console_win, &hwin, search_buffer, page, Action, scrolling_pad);
                     int search_char = getch();
                     if (search_char == ERR) {
                         continue;
@@ -249,6 +261,7 @@ int main() {
         }
     }
     delwin(console_win);
+    delwin(scrolling_pad);
     endwin();
     return 0;
 }
