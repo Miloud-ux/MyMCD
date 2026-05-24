@@ -1,4 +1,5 @@
 #include "help_window.h"
+#include "graphics.h"
 
 static HelpPageData helpdb[HelpPageNum] =
     {[Main] =
@@ -28,12 +29,8 @@ static HelpPageData helpdb[HelpPageNum] =
                {.text = "", .line_start = 13, .type = p},
                {.text = "CLI PROMPT SYNTAX ENGINE:", .line_start = 14, .type = h1},
                {.text = "All explicit adjustments use the command line panel.", .line_start = 15, .type = p},
-               {.text = "", .line_start = 16, .type = p},
-               {.text = "MCD TRIVIA: Peter Chen introduced the original ER syntax in 1976.", .line_start = 17, .type = p},
-               {.text = "MERISE TRIVIA: Merise introduced the modern MCD system in Europe.", .line_start = 18, .type = p},
-               {.text = "", .line_start = 19, .type = p},
-               {.text = "Press 'e' for examples                 Press 'h' for hotkeys", .line_start = 20, .type = hint}},
-          .line_count = 20},
+               {.text = "Press 'e' for examples                 Press 'h' for hotkeys", .line_start = 17, .type = hint}},
+          .line_count = 17},
      [Hotkeys] = {.lines = {{.text = "==== HOTKEYS & NAVIGATION ====", .line_start = 21, .type = h},
                             {.text = "Use these parameters to alter active nodes on your canvas layout.",
                              .line_start = 22,
@@ -57,22 +54,17 @@ static HelpPageData helpdb[HelpPageNum] =
                             {.text = "  * Relationships cannot link directly to other relationship blocks.",
                              .line_start = 33,
                              .type = p},
-                            {.text = "", .line_start = 34, .type = p},
                             {.text = "NCURSES TRIVIA:", .line_start = 35, .type = h1},
                             {.text = "  * Ncurses handles window layers using custom virtual screen pads.",
                              .line_start = 36,
                              .type = p},
-                            {.text = "  * A 1,N cardinality means a record matches at least one item.",
-                             .line_start = 37,
-                             .type = p},
                             {.text = "  * Identifiers map directly into relational columns downstream.",
                              .line_start = 38,
                              .type = p},
-                            {.text = "", .line_start = 39, .type = p},
                             {.text = "Press 'e' for examples                 Press 'm' back to main help",
                              .line_start = 40,
                              .type = hint}},
-                  .line_count = 20},
+                  .line_count = 17},
      [Examples] = {
          .lines = {{.text = "==== COMMAND SYNTAX & EXAMPLES ====", .line_start = 41, .type = h},
                    {.text = "Execute model assembly behaviors using these structural actions.",
@@ -98,20 +90,19 @@ static HelpPageData helpdb[HelpPageNum] =
                     .line_start = 55,
                     .type = p},
                    {.text = "", .line_start = 56, .type = p},
-                   {.text = "DATABASE DESIGN TRIVIA:", .line_start = 57, .type = h1},
-                   {.text = "  * Normalizing schemas prevents unexpected database deletion bugs.",
-                    .line_start = 58,
-                    .type = p},
-                   {.text = "", .line_start = 59, .type = p},
                    {.text = "Press 'h' for hotkeys                  Press 'm' back to main help",
                     .line_start = 60,
                     .type = hint}},
-         .line_count = 20}};
+         .line_count = 17}};
+
+// Functions
 
 void init_help_window(HelpWindow *win, HelpPage current_page) {
-    win->top_visible_line = 0;
     win->current_page = current_page;
     win->pages_db = helpdb;
+    win->examples_scrolling_line = PAD_OFFSET * 2;
+    win->main_scrolling_line = 0;
+    win->hotkey_scrolling_line = PAD_OFFSET;
 
     for (int p = 0; p < HelpPageNum; p++) {
         for (size_t l = 0; l < helpdb[p].line_count; l++) {
@@ -130,4 +121,24 @@ void set_current_page(HelpWindow *win, HelpPage page) {
         return;
     }
     win->current_page = page;
+}
+
+void set_scrolling_line(HelpWindow *win, int line) {
+    if (line < 0) {
+        return;
+    }
+    switch (win->current_page) {
+    case Main:
+        win->main_scrolling_line = line;
+        break;
+
+    case Hotkeys:
+
+        win->hotkey_scrolling_line = line;
+        break;
+
+    case Examples:
+        win->examples_scrolling_line = line;
+        break;
+    }
 }
