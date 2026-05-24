@@ -4,6 +4,8 @@
 #include <ncurses.h>
 #include <string.h>
 
+enum status last_status = Typing;
+
 void debugPrintPath(AStarPath *path, const char *name) {
     if (!path) {
         mvprintw(0, 0, "%s: No path found", name);
@@ -409,8 +411,10 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
     int help_win_y = (std_screen_height - h) / 2;
     int help_win_x = (std_screen_width - w) / 2;
 
+    // if (last_status == Editing || last_status == Typing) {
     wresize(win, h, w);
     mvwin(win, help_win_y, help_win_x);
+    //}
     werase(win);
     box(win, 0, 0);
 
@@ -420,10 +424,10 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
     wattroff(win, COLOR_PAIR(6) | A_BOLD | A_REVERSE);
 
     // Pad coords
-    int sminrow = help_win_y + 2;     // Start rendering below top border and header
-    int smincol = help_win_x + 2;     // Leave a 1-char margin inside left border
-    int smaxcol = help_win_x + w - 3; // Stop a 1-char margin inside right border
-    int smaxrow = help_win_y + h - 2; // Default bottom limit
+    int sminrow = help_win_y + 2;     // start rendering below top border and header
+    int smincol = help_win_x + 2;     // leave a 1 char margin inside left border
+    int smaxcol = help_win_x + w - 3; // stop a 1 char margin inside right border
+    int smaxrow = help_win_y + h - 2; // default bottom limit
 
     if (Action) {
         wmove(win, h - 2, 1);
@@ -436,9 +440,9 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
         smaxrow = help_win_y + h - 4;
     }
 
+    touchwin(win); // force ncurses to not-optimise and draw the whole window
     wrefresh(win);
 
-    int top_visible_line_per_help_page = 0;
     switch (page) {
     case Main:
         prefresh(scrolling_pad, 0 + hwin->main_scrolling_line, 0, sminrow, smincol, smaxrow, smaxcol);
@@ -513,4 +517,53 @@ WINDOW *init_pad(int num_lines, int num_col, HelpWindow hwin) {
     }
 
     return pad;
+}
+
+void revert_back_to_console(WINDOW *console_win, status *status, bool *needs_redraw) {
+    if (!console_win) {
+        return;
+    }
+
+    *status = Typing;
+    last_status = Typing;
+    int screen_height, screen_width;
+    getmaxyx(stdscr, screen_height, screen_width);
+
+    int console_y = screen_height - CONSOLE_HEIGHT;
+
+    wresize(console_win, CONSOLE_HEIGHT, screen_width);
+    mvwin(console_win, console_y, 0);
+    werase(console_win);
+
+    *needs_redraw = true;
+}
+
+void search_help(WINDOW *win, HelpWindow *hwin, char search_buffer[], int search_len, HelpAction *action, HelpPage page,
+                 WINDOW *scrolling_pad) {
+    *action = Search;
+    while (*action) {
+        draw_help_window(win, hwin, search_buffer, page, *action, scrolling_pad);
+        int search_char = getch();
+        if (search_char == ERR) {
+            continue;
+        }
+        if (search_char == '\n') {
+            // do_search(search_buffer);
+            search_len = 0;
+            search_buffer[0] = '\0';
+        } else if (search_char == 'q') {
+            *action = Navigation;
+            search_len = 0;
+            search_buffer[0] = '\0';
+        } else if (search_char == KEY_BACKSPACE || search_char == 127) {
+            if (search_len > 0) {
+                search_buffer[--search_len] = '\0';
+            }
+        } else if (search_char >= 32 && search_char <= 126) {
+            if (search_len < 255) {
+                search_buffer[search_len++] = search_char;
+                search_buffer[search_len] = '\0';
+            }
+        }
+    }
 }

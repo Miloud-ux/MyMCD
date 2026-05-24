@@ -53,18 +53,20 @@ int main() {
     // Help window info
     int center_y = (std_screen_height - HELP_WIN_HEIGHT) / 2;
     int center_x = (std_screen_width - HELP_WIN_WIDTH) / 2;
-    static int curr_main_scrolling_line = 1;
-    static int curr_examples_scrolling_line = 41;
-    static int curr_hotkey_scrolling_line = 21;
+    int curr_main_scrolling_line = 1;
+    int curr_examples_scrolling_line = 41;
+    int curr_hotkey_scrolling_line = 1;
 
     // init console_win
     bool moving = false;
     status status = Typing;
+    last_status = Typing;
+
     HelpPage page = Main;
 
     // init help window
     HelpWindow hwin;
-    init_help_window(&hwin, Main);
+    init_help_window(&hwin, page);
 
     // init scrolling pad
     WINDOW *scrolling_pad = init_pad(PAD_LINES, PAD_COLS, hwin);
@@ -98,6 +100,7 @@ int main() {
                     is_running = false;
                 } else if (strcmp(input_buffer, "help") == 0) {
                     status = Help;
+                    last_status = Help;
                 } else {
                     da_execute(console_win, input_buffer, &needs_redraw);
                 }
@@ -115,6 +118,7 @@ int main() {
                 // Editing mode
             } else if (ch == '\t') {
                 status = Editing;
+                last_status = Editing;
                 int entity_index = 0;
                 int relationship_index = 0;
                 bool switching_moving_type = true;
@@ -197,39 +201,16 @@ int main() {
                     case 'x':
                         switching_moving_type = false;
                         status = Typing;
+                        last_status = Typing;
                         break;
                     }
                 }
             }
             break;
         case Help:
-            set_current_page(&hwin, page);
-            draw_help_window(console_win, &hwin, search_buffer, page, Action, scrolling_pad);
-            int wch = getch();
-            if (wch == ERR) {
-                continue; // continue?? we aren't direclty in a loop or  are we ?
-            }
-
-            if (wch == 'q') {
-                // revert changes
-                status = Typing;
-                int screen_height, screen_width;
-                getmaxyx(stdscr, screen_height, screen_width);
-
-                int console_y = screen_height - CONSOLE_HEIGHT;
-
-                wresize(console_win, CONSOLE_HEIGHT, screen_width);
-                mvwin(console_win, console_y, 0);
-                werase(console_win);
-
-                needs_redraw = true;
-            } else if (wch == 'm') {
-                // TODO: why escape takes long here and in editing mode (replaced with q)
-                // This is for commands
-                // implement a search for command and highlight
-                page = Main;
+            switch (page) {
+            case Main:
                 curr_main_scrolling_line = 1;
-
                 bool isscrolling = true;
 
                 while (isscrolling) {
@@ -244,8 +225,28 @@ int main() {
                         break;
 
                     case 'k':
-                        (curr_main_scrolling_line--) % MAX_LINES_PER_PAGE;
+                        ((curr_main_scrolling_line--) % MAX_LINES_PER_PAGE);
                         break;
+                    case 'e':
+                        set_current_page(&hwin, Examples);
+                        page = Examples;
+                        isscrolling = false;
+                        break;
+                    case 'h':
+                        set_current_page(&hwin, Hotkeys);
+                        page = Hotkeys;
+                        isscrolling = false;
+                        werase(console_win);
+                        mvwprintw(console_win, 10, 10, "Changed Page Succesfully");
+                        wrefresh(console_win);
+                        break;
+                    case '/':
+                        search_help(console_win, &hwin, search_buffer, search_len, &Action, page, scrolling_pad);
+                        break;
+
+                    case 'q':
+                        revert_back_to_console(console_win, &status, &needs_redraw);
+                    // falls down
                     default:
                         curr_main_scrolling_line = 1;
                         isscrolling = false;
@@ -253,14 +254,13 @@ int main() {
                     }
                     set_scrolling_line(&hwin, curr_main_scrolling_line);
                 }
+                break;
 
-            } else if (wch == 'h') {
-                page = Hotkeys;
+            case Hotkeys:
                 curr_hotkey_scrolling_line = 1;
+                bool Hotkeys_isscrolling = true;
 
-                bool isscrolling = true;
-
-                while (isscrolling) {
+                while (Hotkeys_isscrolling) {
                     draw_help_window(console_win, &hwin, search_buffer, page, Action, scrolling_pad);
                     int ch = getch();
                     if (ch == ERR) {
@@ -272,23 +272,38 @@ int main() {
                         break;
 
                     case 'k':
-                        (curr_hotkey_scrolling_line--) % MAX_LINES_PER_PAGE;
+                        ((curr_hotkey_scrolling_line--) % MAX_LINES_PER_PAGE);
                         break;
+                    case 'e':
+                        set_current_page(&hwin, Examples);
+                        page = Examples;
+                        Hotkeys_isscrolling = false;
+                        break;
+                    case 'm':
+                        set_current_page(&hwin, Main);
+                        page = Main;
+                        Hotkeys_isscrolling = false;
+                        break;
+                    case '/':
+                        search_help(console_win, &hwin, search_buffer, search_len, &Action, page, scrolling_pad);
+                        break;
+
+                    case 'q':
+                        revert_back_to_console(console_win, &status, &needs_redraw);
                     default:
                         curr_hotkey_scrolling_line = 1;
-                        isscrolling = false;
+                        Hotkeys_isscrolling = false;
                         break;
                     }
                     set_scrolling_line(&hwin, curr_hotkey_scrolling_line);
                 }
+                break;
 
-            } else if (wch == 'e') {
-                page = Examples;
+            case Examples:
                 curr_examples_scrolling_line = 1;
+                bool Examples_isscrolling = true;
 
-                bool isscrolling = true;
-
-                while (isscrolling) {
+                while (Examples_isscrolling) {
                     draw_help_window(console_win, &hwin, search_buffer, page, Action, scrolling_pad);
                     int ch = getch();
                     if (ch == ERR) {
@@ -300,45 +315,33 @@ int main() {
                         break;
 
                     case 'k':
-                        (curr_examples_scrolling_line--) % MAX_LINES_PER_PAGE;
+                        ((curr_examples_scrolling_line--) % MAX_LINES_PER_PAGE);
                         break;
+                    case 'h':
+                        set_current_page(&hwin, Hotkeys);
+                        page = Hotkeys;
+                        Examples_isscrolling = false;
+                        break;
+                    case 'm':
+                        set_current_page(&hwin, Main);
+                        page = Main;
+                        Examples_isscrolling = false;
+                        break;
+                    case '/':
+                        search_help(console_win, &hwin, search_buffer, search_len, &Action, page, scrolling_pad);
+                        break;
+
+                    case 'q':
+                        revert_back_to_console(console_win, &status, &needs_redraw);
                     default:
                         curr_examples_scrolling_line = 1;
-                        isscrolling = false;
+                        Examples_isscrolling = false;
                         break;
                     }
                     set_scrolling_line(&hwin, curr_examples_scrolling_line);
                 }
-
-            } else if (page == Main && wch == '/') {
-                Action = Search;
-                while (Action) {
-                    draw_help_window(console_win, &hwin, search_buffer, page, Action, scrolling_pad);
-                    int search_char = getch();
-                    if (search_char == ERR) {
-                        continue;
-                    }
-                    if (search_char == '\n') {
-                        // do_search(search_buffer);
-                        search_len = 0;
-                        search_buffer[0] = '\0';
-                    } else if (search_char == 'q') {
-                        Action = Navigation;
-                        search_len = 0;
-                        search_buffer[0] = '\0';
-                    } else if (search_char == KEY_BACKSPACE || search_char == 127) {
-                        if (search_len > 0) {
-                            search_buffer[--search_len] = '\0';
-                        }
-                    } else if (search_char >= 32 && search_char <= 126) {
-                        if (search_len < 255) {
-                            search_buffer[search_len++] = search_char;
-                            search_buffer[search_len] = '\0';
-                        }
-                    }
-                }
+                break;
             }
-            break;
         }
     }
     delwin(console_win);

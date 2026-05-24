@@ -17,6 +17,7 @@
 // Used to traverse to the desired HelpPage ie: Main:0, Examples: Example_line = PAD_OFFSET*Main_line
 
 typedef enum status { Typing, Editing, Help } status;
+extern status last_status;
 
 /* Main: Default halp page ie:  basic commands
  * Hotkeys: Keyboard shortcuts ie: Editing mode
@@ -52,6 +53,9 @@ void draw_console_prompt(WINDOW *console_win, const char *input, status status);
 void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, HelpPage page, HelpAction Action,
                       WINDOW *scrolling_pad);
 
+void revert_back_to_console(WINDOW *console_win, status *status, bool *needs_redraw);
+void search_help(WINDOW *win, HelpWindow *hwin, char search_buffer[], int search_len, HelpAction *action, HelpPage page,
+                 WINDOW *scrolling_pad);
 // Pad control (used for scrolling)
 WINDOW *init_pad(int num_lines, int num_col, HelpWindow hwin);
 

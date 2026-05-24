@@ -1,4 +1,5 @@
 #include "help_window.h"
+#include "graphics.h"
 
 static HelpPageData helpdb[HelpPageNum] =
     {[Main] =
@@ -99,9 +100,9 @@ static HelpPageData helpdb[HelpPageNum] =
 void init_help_window(HelpWindow *win, HelpPage current_page) {
     win->current_page = current_page;
     win->pages_db = helpdb;
-    win->examples_scrolling_line = 0;
+    win->examples_scrolling_line = PAD_OFFSET * 2;
     win->main_scrolling_line = 0;
-    win->hotkey_scrolling_line = 0;
+    win->hotkey_scrolling_line = PAD_OFFSET;
 
     for (int p = 0; p < HelpPageNum; p++) {
         for (size_t l = 0; l < helpdb[p].line_count; l++) {
