@@ -71,6 +71,12 @@ void tokenize_content(const char *content, Token tokens[], int *count) {
                 // testing
                 tokens[*count].type = TOKEN_IDENTIFIER;
             }
+        } else { // Other Symbols like tilde or @
+            tokens[*count].pos = (int)(p - content);
+            tokens[*count].length = 1;
+            tokens[*count].value[1] = '\0';
+            tokens[*count].type = TOKEN_UNKNOWN;
+            p++;
         }
         (*count)++;
     }

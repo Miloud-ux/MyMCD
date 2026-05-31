@@ -8,15 +8,16 @@
 
 int main() {
     initscr();
+    initColors();
+
     cbreak();
     noecho();
     keypad(stdscr, TRUE);
-    nodelay(stdscr, TRUE);
-    initColors();
-    enum fps { SIXTY = 60, THIRTY = 30 }; // 16, 33
-    enum fps current_fps = THIRTY;
 
-    timeout(current_fps);
+    // TODO: move to graphics.h header
+    enum fps { SIXTY = 16, THIRTY = 30 }; // 60, 30 fps
+    enum fps update_interval = THIRTY;
+    timeout(update_interval);
 
     int screen_height, screen_width;
     getmaxyx(stdscr, screen_height, screen_width);
@@ -42,7 +43,7 @@ int main() {
     WINDOW *console_win = create_console_window();
     char input_buffer[256] = "";
     int input_len = 0;
-    char search_buffer[256] = "";
+    char search_buffer[MAX_SEARCH_BUFFER_LEN] = "";
     int search_len = 0;
     HelpAction Action = Navigation;
 
@@ -53,9 +54,9 @@ int main() {
     // Help window info
     int center_y = (std_screen_height - HELP_WIN_HEIGHT) / 2;
     int center_x = (std_screen_width - HELP_WIN_WIDTH) / 2;
-    int curr_main_scrolling_line = 1;
-    int curr_examples_scrolling_line = 41;
-    int curr_hotkey_scrolling_line = 1;
+    int curr_main_scrolling_line;
+    int curr_examples_scrolling_line;
+    int curr_hotkey_scrolling_line;
 
     // init console_win
     bool moving = false;
@@ -80,8 +81,10 @@ int main() {
 
     bool is_running = true;
     bool needs_redraw = false;
+    int fps_counter = 0;
 
     while (is_running) {
+        fps_counter++;
         if (needs_redraw) {
             draw_all_and_refresh(screen_width, &moving, &needs_redraw);
         }
@@ -132,6 +135,8 @@ int main() {
                     case 'e':
                         while (moving) {
                             int move_key = getch();
+                            if (move_key == ERR)
+                                continue;
                             if (entity_index >= global_objects.entity_count) {
                                 entity_index = global_objects.entity_count % entity_index;
                             }
@@ -167,6 +172,8 @@ int main() {
                     case 'r':
                         while (moving) {
                             int move_key = getch();
+                            if (move_key == ERR)
+                                continue;
                             if (relationship_index >= global_objects.relationship_count) {
                                 relationship_index = global_objects.relationship_count % relationship_index;
                             }
@@ -202,6 +209,8 @@ int main() {
                         switching_moving_type = false;
                         status = Typing;
                         last_status = Typing;
+                        needs_redraw = true; // TODO: review this (used after setting new time interval and checkinf for
+                                             // err for getch())
                         break;
                     }
                 }
@@ -222,8 +231,11 @@ int main() {
                     switch (ch) {
                     case 'j':
                         curr_main_scrolling_line++;
+                        int max_vis_row = get_max_visible_row(curr_main_scrolling_line, Main);
+                        if (max_vis_row >= PAD_HOTKEYS_OFFSET - 1) {
+                            curr_main_scrolling_line = 1;
+                        }
                         break;
-
                     case 'k':
                         ((curr_main_scrolling_line--) % MAX_LINES_PER_PAGE);
                         break;
@@ -231,14 +243,13 @@ int main() {
                         set_current_page(&hwin, Examples);
                         page = Examples;
                         isscrolling = false;
+                        curr_main_scrolling_line = 1;
                         break;
                     case 'h':
                         set_current_page(&hwin, Hotkeys);
                         page = Hotkeys;
                         isscrolling = false;
-                        werase(console_win);
-                        mvwprintw(console_win, 10, 10, "Changed Page Succesfully");
-                        wrefresh(console_win);
+                        curr_main_scrolling_line = 1;
                         break;
                     case '/':
                         search_help(console_win, &hwin, search_buffer, search_len, &Action, page, scrolling_pad);
@@ -269,6 +280,10 @@ int main() {
                     switch (ch) {
                     case 'j':
                         curr_hotkey_scrolling_line++;
+                        int max_vis_row = get_max_visible_row(curr_hotkey_scrolling_line, Hotkeys);
+                        if (max_vis_row >= PAD_EXAMPLES_OFFSET - 1) {
+                            curr_hotkey_scrolling_line = 1;
+                        }
                         break;
 
                     case 'k':
@@ -278,11 +293,13 @@ int main() {
                         set_current_page(&hwin, Examples);
                         page = Examples;
                         Hotkeys_isscrolling = false;
+                        curr_hotkey_scrolling_line = 1;
                         break;
                     case 'm':
                         set_current_page(&hwin, Main);
                         page = Main;
                         Hotkeys_isscrolling = false;
+                        curr_hotkey_scrolling_line = 1;
                         break;
                     case '/':
                         search_help(console_win, &hwin, search_buffer, search_len, &Action, page, scrolling_pad);
@@ -312,17 +329,22 @@ int main() {
                     switch (ch) {
                     case 'j':
                         curr_examples_scrolling_line++;
+                        int max_vis_row = get_max_visible_row(curr_examples_scrolling_line, Examples);
+                        if (max_vis_row >= (PAD_EXAMPLES_OFFSET - 1) + MAX_LINES_PER_PAGE) {
+                            curr_examples_scrolling_line = 1;
+                        }
                         break;
-
                     case 'k':
                         ((curr_examples_scrolling_line--) % MAX_LINES_PER_PAGE);
                         break;
                     case 'h':
+                        curr_examples_scrolling_line = 1;
                         set_current_page(&hwin, Hotkeys);
                         page = Hotkeys;
                         Examples_isscrolling = false;
                         break;
                     case 'm':
+                        curr_examples_scrolling_line = 1;
                         set_current_page(&hwin, Main);
                         page = Main;
                         Examples_isscrolling = false;
@@ -344,6 +366,7 @@ int main() {
             }
         }
     }
+
     delwin(console_win);
     delwin(scrolling_pad);
     endwin();

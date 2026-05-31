@@ -7,11 +7,14 @@ SRC = src/main.c \
       src/graphics.c \
       src/global_objects.c \
       src/DSA/astar.c \
+      src/DSA/kmp.c \
+      src/DSA/vec.c \
       src/Lexer/parse.c \
       src/Lexer/tokenize.c \
 	  src/command_processor.c \
 	  src/help_window.c \
       src/DSA/pqueue.c
+
 
 TARGET = main
 

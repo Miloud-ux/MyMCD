@@ -5,6 +5,7 @@
 #include "global_objects.h"
 #include "help_window.h"
 #include <ncurses.h>
+#include <string.h>
 
 //  Windows and scrolling pad
 #define CONSOLE_HEIGHT 6 // console_win width = stdscr width
@@ -13,7 +14,11 @@
 #define PAD_LINES 60
 #define PAD_COLS 78
 #define PAD_VIEW_WINDOW 20
+
 #define PAD_OFFSET 17
+#define PAD_HOTKEYS_OFFSET 20
+#define PAD_EXAMPLES_OFFSET 40
+// No need for main offset since it's the first page written in the pad
 // Used to traverse to the desired HelpPage ie: Main:0, Examples: Example_line = PAD_OFFSET*Main_line
 
 typedef enum status { Typing, Editing, Help } status;
@@ -58,5 +63,18 @@ void search_help(WINDOW *win, HelpWindow *hwin, char search_buffer[], int search
                  WINDOW *scrolling_pad);
 // Pad control (used for scrolling)
 WINDOW *init_pad(int num_lines, int num_col, HelpWindow hwin);
+
+static inline int get_max_visible_row(int start_row, int page_type) {
+    switch (page_type) {
+    case Main:
+        return start_row + MAX_LINES_PER_PAGE;
+    case Hotkeys:
+        return start_row + PAD_HOTKEYS_OFFSET + MAX_LINES_PER_PAGE;
+    case Examples:
+        return start_row + PAD_EXAMPLES_OFFSET + MAX_LINES_PER_PAGE;
+    default:
+        return start_row;
+    }
+}
 
 #endif

@@ -14,7 +14,7 @@ typedef enum {
     TOKEN_IDENTIFIER,
     TOKEN_HELP,
     TOKEN_CLEAR,
-    TOKEN_UNKNOWN
+    TOKEN_UNKNOWN // for weird unicode chars like tilde or @
 } TokenType;
 
 typedef struct {

@@ -62,7 +62,7 @@ static HelpPageData helpdb[HelpPageNum] =
                              .line_start = 38,
                              .type = p},
                             {.text = "Press 'e' for examples                 Press 'm' back to main help",
-                             .line_start = 40,
+                             .line_start = 38,
                              .type = hint}},
                   .line_count = 17},
      [Examples] = {
@@ -91,7 +91,7 @@ static HelpPageData helpdb[HelpPageNum] =
                     .type = p},
                    {.text = "", .line_start = 56, .type = p},
                    {.text = "Press 'h' for hotkeys                  Press 'm' back to main help",
-                    .line_start = 60,
+                    .line_start = 58,
                     .type = hint}},
          .line_count = 17}};
 

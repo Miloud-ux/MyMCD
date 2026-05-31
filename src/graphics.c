@@ -1,5 +1,6 @@
 #include "graphics.h"
 #include "DSA/astar.h"
+#include "DSA/kmp.h"
 #include "help_window.h"
 #include <ncurses.h>
 #include <string.h>
@@ -427,6 +428,7 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
     int sminrow = help_win_y + 2;     // start rendering below top border and header
     int smincol = help_win_x + 2;     // leave a 1 char margin inside left border
     int smaxcol = help_win_x + w - 3; // stop a 1 char margin inside right border
+
     int smaxrow = help_win_y + h - 2; // default bottom limit
 
     if (Action) {
@@ -440,20 +442,24 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
         smaxrow = help_win_y + h - 4;
     }
 
-    touchwin(win); // force ncurses to not-optimise and draw the whole window
+    // touchwin(win); // force ncurses to not-optimise and draw the whole window (didn't work)
     wrefresh(win);
 
     switch (page) {
     case Main:
-        prefresh(scrolling_pad, 0 + hwin->main_scrolling_line, 0, sminrow, smincol, smaxrow, smaxcol);
+        prefresh(scrolling_pad, hwin->main_scrolling_line, 0, sminrow, smincol, smaxrow, smaxcol);
         break;
     case Hotkeys:
-        prefresh(scrolling_pad, PAD_OFFSET + hwin->hotkey_scrolling_line, 0, sminrow, smincol, smaxrow, smaxcol);
+        prefresh(scrolling_pad, PAD_HOTKEYS_OFFSET + hwin->hotkey_scrolling_line, 0, sminrow, smincol, smaxrow, smaxcol);
         break;
     case Examples:
-        prefresh(scrolling_pad, (PAD_OFFSET * 2) + hwin->examples_scrolling_line, 0, sminrow, smincol, smaxrow, smaxcol);
+        prefresh(scrolling_pad, PAD_EXAMPLES_OFFSET + hwin->examples_scrolling_line, 0, sminrow, smincol, smaxrow,
+                 smaxcol);
         break;
     }
+
+    // mvwprintw(win, smaxrow - 2, (w / 2) - 16, "  Press 'q' to quit  ");
+    // wrefresh(win);
 }
 
 void draw_all_entities(GlobalObjects global_objects, int moving_index, bool is_moving) {
@@ -541,6 +547,20 @@ void revert_back_to_console(WINDOW *console_win, status *status, bool *needs_red
 void search_help(WINDOW *win, HelpWindow *hwin, char search_buffer[], int search_len, HelpAction *action, HelpPage page,
                  WINDOW *scrolling_pad) {
     *action = Search;
+    // init the LPS array with MAX_SIZE and use search_len instead of custom size allocation each time
+
+    /* TODO : Move this declaration elsewhere to avoid
+     * redeclaring each call but since it's in the stack it's
+     * fine for now
+     */
+    int LPS[MAX_SEARCH_BUFFER_LEN];
+    init_LPS(LPS);
+
+    // include vector datatype
+    // return a vector of results
+    // implement search and compare tokens
+    // hash tokens
+
     while (*action) {
         draw_help_window(win, hwin, search_buffer, page, *action, scrolling_pad);
         int search_char = getch();
@@ -549,6 +569,7 @@ void search_help(WINDOW *win, HelpWindow *hwin, char search_buffer[], int search
         }
         if (search_char == '\n') {
             // do_search(search_buffer);
+
             search_len = 0;
             search_buffer[0] = '\0';
         } else if (search_char == 'q') {
