@@ -544,23 +544,18 @@ void revert_back_to_console(WINDOW *console_win, status *status, bool *needs_red
     *needs_redraw = true;
 }
 
+// TODO: implement a graphical logging funciton that even
+// writes on stdscr
 void search_help(WINDOW *win, HelpWindow *hwin, char search_buffer[], int search_len, HelpAction *action, HelpPage page,
                  WINDOW *scrolling_pad) {
-    *action = Search;
-    // init the LPS array with MAX_SIZE and use search_len instead of custom size allocation each time
 
-    /* TODO : Move this declaration elsewhere to avoid
-     * redeclaring each call but since it's in the stack it's
-     * fine for now
+    /* TODO :
+     * return a vector of results
+     * implement search and compare tokens
+     * hash tokens
      */
-    int LPS[MAX_SEARCH_BUFFER_LEN];
-    init_LPS(LPS);
 
-    // include vector datatype
-    // return a vector of results
-    // implement search and compare tokens
-    // hash tokens
-
+    *action = Search;
     while (*action) {
         draw_help_window(win, hwin, search_buffer, page, *action, scrolling_pad);
         int search_char = getch();

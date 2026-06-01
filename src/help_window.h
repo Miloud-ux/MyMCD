@@ -1,6 +1,4 @@
-#ifndef HELP_WINDOW_H
-#define HELP_WINDOW_H
-
+#pragma once
 /* This header is used to contain all the functions
  * related to the help win and the structs/enums
  * related to it
@@ -60,5 +58,3 @@ typedef struct HelpWindow {
 void init_help_window(HelpWindow *win, HelpPage current_page);
 void set_current_page(HelpWindow *win, HelpPage page);
 void set_scrolling_line(HelpWindow *win, int line);
-
-#endif // !HELP_WINDOW_H
