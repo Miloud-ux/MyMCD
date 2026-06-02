@@ -219,6 +219,7 @@ int main() {
         case Help:
             switch (page) {
             case Main:
+                // TODO(Critical): make use is it 1 or 0
                 curr_main_scrolling_line = 1;
                 bool isscrolling = true;
 
@@ -231,13 +232,13 @@ int main() {
                     switch (ch) {
                     case 'j':
                         curr_main_scrolling_line++;
-                        int max_vis_row = get_max_visible_row(curr_main_scrolling_line, Main);
-                        if (max_vis_row >= PAD_HOTKEYS_OFFSET - 1) {
-                            curr_main_scrolling_line = 1;
-                        }
+                        // int max_vis_row = get_max_visible_row(curr_main_scrolling_line, Main);
+                        // if (max_vis_row >= PAD_HOTKEYS_OFFSET - 1) {
+                        //     curr_main_scrolling_line = 1;
+                        //}
                         break;
                     case 'k':
-                        ((curr_main_scrolling_line--) % MAX_LINES_PER_PAGE);
+                        (curr_main_scrolling_line--);
                         break;
                     case 'e':
                         set_current_page(&hwin, Examples);

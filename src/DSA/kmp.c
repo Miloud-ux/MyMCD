@@ -58,7 +58,7 @@ int *search_kmp(const char *str, const char *search_buffer, int search_len, int 
             j = lps[j - 1];
         }
     }
-    return result_indices; // match not found
+    return result_indices;
 }
 
 /* NOTE:

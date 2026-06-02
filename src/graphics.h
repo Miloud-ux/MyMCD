@@ -4,6 +4,7 @@
 #include "MCD_elements.h"
 #include "global_objects.h"
 #include "help_window.h"
+#include "kmp.h"
 #include <ncurses.h>
 #include <string.h>
 
@@ -50,7 +51,7 @@ void draw_all_and_refresh(int screen_width, bool *moving, bool *needs_redraw);
 /* CONSOLE DRAWING FUNCTIONS
  * Console drawing functions call refresh internally
  * The Caller musn't refresh them
- * TODO: modify to a unified refresh system
+ * TODO(Critical): modify to a unified refresh system
  */
 
 WINDOW *create_console_window();
@@ -76,5 +77,8 @@ static inline int get_max_visible_row(int start_row, int page_type) {
         return start_row;
     }
 }
+
+// Render Search results
+void highlight_search_matches(HelpWindow *hwin, WINDOW *win, SearchResult *matches, const char *search_buffer);
 
 #endif
