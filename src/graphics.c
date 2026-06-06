@@ -443,8 +443,9 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
         smaxrow = help_win_y + h - 4;
     }
 
-    // touchwin(win); // force ncurses to not-optimise and draw the whole window (didn't work)
     wrefresh(win);
+
+    // touchwin(win); // force ncurses to not-optimise and draw the whole window (didn't work)
 
     switch (page) {
     case Main:
@@ -549,29 +550,64 @@ void revert_back_to_console(WINDOW *console_win, status *status, bool *needs_red
 // writes on stdscr
 void search_help(WINDOW *win, HelpWindow *hwin, char search_buffer[], int search_len, HelpAction *action, HelpPage page,
                  WINDOW *scrolling_pad) {
-
-    /* TODO :
-     * return a vector of results
-     * implement search and compare tokens
-     * hash tokens
-     */
-
     *action = Search;
-    set_current_page(hwin, page);
     while (*action) {
         draw_help_window(win, hwin, search_buffer, page, *action, scrolling_pad);
+
         int search_char = getch();
         if (search_char == ERR) {
             continue;
         }
+
         if (search_char == '\n') {
-            // do_search(search_buffer);
-            SearchResult *matches = NULL;
-            matches = search_help_kmp(hwin, search_buffer, search_len);
+            SearchResult *matches = search_help_kmp(hwin, search_buffer, search_len);
             if (matches) {
-                // highlight results
                 highlight_search_matches(hwin, win, matches, search_buffer);
+
+                HelpPage curr = hwin->current_page;
+                int curr_page_first_line = hwin->pages_db[curr].lines[0].line_start;
+
+                int num_matches = vec_len(matches);
+
+                bool searching = true;
+                int curr_line_idx = 0;
+
+                while (searching) {
+                    int hop = getch();
+                    if (hop == ERR)
+                        continue;
+
+                    switch (hop) {
+                    case 'n': // forward
+
+                        /* Notes on absolute and relative positions
+                         *  compare index to the length of the matches array
+                         *  and Convert absolute line to relative scrolling line
+                         * int relative_line = matches[curr_line_idx].line - curr_page_first_line + 1;
+                         */
+
+                        if (curr_line_idx + 1 < num_matches) {
+                            ++curr_line_idx;
+                            int relative_line = matches[curr_line_idx].line - curr_page_first_line + 1;
+                            set_scrolling_line(hwin, relative_line);
+                        }
+                        break;
+                    case 'N': // backward
+                        if (curr_line_idx > 0) {
+                            --curr_line_idx;
+                            int relative_line = matches[curr_line_idx].line - curr_page_first_line + 1;
+                            set_scrolling_line(hwin, relative_line);
+                        }
+                        break;
+                    case 'q':
+                        searching = false;
+                        break;
+                    }
+                    wrefresh(win);
+                }
+                destroy_search_results(matches);
             }
+
             search_len = 0;
             search_buffer[0] = '\0';
         } else if (search_char == 'q') {
@@ -592,32 +628,25 @@ void search_help(WINDOW *win, HelpWindow *hwin, char search_buffer[], int search
 }
 
 void highlight_search_matches(HelpWindow *hwin, WINDOW *win, SearchResult *matches, const char *search_buffer) {
-
-    // pad offest coords
-
     HelpPage curr_page = hwin->current_page;
-
     int offset;
 
     switch (curr_page) {
-
     case Main:
-
         offset = hwin->main_scrolling_line;
-
         break;
-
     case Hotkeys:
-
         offset = hwin->hotkey_scrolling_line;
-
         break;
-
     case Examples:
-
         offset = hwin->examples_scrolling_line;
-
         break;
+    }
+
+    //  get the absolute starting line of the current page to  normalize the coordinates
+    int page_start_line = 1;
+    if (hwin->pages_db && hwin->pages_db[curr_page].line_count > 0) {
+        page_start_line = hwin->pages_db[curr_page].lines[0].line_start;
     }
 
     int std_screen_width, std_screen_height;
@@ -627,84 +656,29 @@ void highlight_search_matches(HelpWindow *hwin, WINDOW *win, SearchResult *match
     if (h >= std_screen_height - 2)
         h = std_screen_height - 2;
 
-    // The caller is checking for if(matches != NULL)
-
     int num_matches = vec_len(matches);
-
     int total_num_matches = 0;
 
     for (size_t i = 0; i < num_matches; i++) {
-
         int line = matches[i].line;
-
         int *line_matches = matches[i].idx;
 
         if (line_matches) {
-
             int line_matches_num = vec_len(line_matches);
-
             for (int j = 0; j < line_matches_num; j++) {
-
                 wattron(win, COLOR_PAIR(6) | A_BOLD | A_REVERSE);
 
-                // TODO :check if the magic number -1 works in case of
-
-                // adding more linges per page offset -1
-
-                int target_row = line - offset + 2;
+                // normalize the absolute line number to a relative row in the viewport
+                //  (absolute_line - page_start) - offset + viewport_padding
+                int target_row = (line - page_start_line) - offset + 3;
 
                 if (target_row >= 2 && target_row < h - 1) {
-
                     mvwprintw(win, target_row, line_matches[j] + 4, "%s", search_buffer);
                 }
-
                 wattroff(win, COLOR_PAIR(6) | A_BOLD | A_REVERSE);
-
                 total_num_matches++;
             }
         }
     }
-
-    //    int curr_match[num_matches][total_num_matches][line_matches_num];
-
     wrefresh(win);
-
-    bool searching = true;
-
-    int curr_line_idx = 0;
-
-    while (searching) {
-
-        int hop = getch();
-
-        if (hop == ERR)
-            continue;
-
-        switch (hop) {
-
-        case 'n': // forward
-
-            ++curr_line_idx;
-
-            set_scrolling_line(hwin, matches[curr_line_idx].line);
-
-            break;
-
-        case 'N': // backward
-
-            --curr_line_idx;
-
-            set_scrolling_line(hwin, matches[curr_line_idx].line);
-
-            break;
-
-        case 'q':
-
-            searching = false;
-
-            break;
-        }
-
-        wrefresh(win);
-    }
 }

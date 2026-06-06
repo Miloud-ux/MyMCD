@@ -16,3 +16,5 @@ int *search_kmp(const char *str, const char *search_buffer, int search_len, int 
 
 // returns the actual result depending on the page the user is searching at
 SearchResult *search_help_kmp(HelpWindow *hwin, const char *search_buffer, int search_len);
+
+void destroy_search_results(SearchResult *s);

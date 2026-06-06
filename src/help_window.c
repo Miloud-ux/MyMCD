@@ -96,7 +96,6 @@ static HelpPageData helpdb[HelpPageNum] =
          .line_count = 17}};
 
 // Functions
-
 void init_help_window(HelpWindow *win, HelpPage current_page) {
     win->current_page = current_page;
     win->pages_db = helpdb;
@@ -133,7 +132,6 @@ void set_scrolling_line(HelpWindow *win, int line) {
         break;
 
     case Hotkeys:
-
         win->hotkey_scrolling_line = line;
         break;
 

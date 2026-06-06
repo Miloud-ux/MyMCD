@@ -5,7 +5,6 @@
 
 // Private utils for this file
 static TokenType *get_line_results_token_types(int *line_results, HelpLine *current_line);
-static void destroy_search_results(SearchResult *s);
 
 void init_LPS(int *lps) {
     for (int i = 0; i < MAX_SEARCH_BUFFER_LEN; i++) {
@@ -89,9 +88,7 @@ SearchResult *search_help_kmp(HelpWindow *hwin, const char *search_buffer, int s
             init_LPS(LPS);
 
             int *line_results = search_kmp(current_line->text, search_buffer, search_len, LPS);
-
             TokenType *line_results_tts = get_line_results_token_types(line_results, current_line);
-
             // TODO: Handle this special case
             // if (vec_len(line_results_tts) != vec_len(line_results)) {
             //  LOG: results num mismatch (potential bug in token position offset
@@ -107,10 +104,6 @@ SearchResult *search_help_kmp(HelpWindow *hwin, const char *search_buffer, int s
                 vec_free(line_results);
                 vec_free(line_results_tts);
             }
-            // TODO:
-            // SearchResult array will be used for rendering later or saved in
-            // a cache array in case of same search patter and maybe hash it to compare
-            // or use Rabin Karp algorithm
         }
     }
     return results;
@@ -136,7 +129,7 @@ static TokenType *get_line_results_token_types(int *line_results, HelpLine *curr
 }
 
 // To free memory after done with search
-static void destroy_search_results(SearchResult *s) {
+void destroy_search_results(SearchResult *s) {
     if (!s) {
         // LOG: no search results available
         return;

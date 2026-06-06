@@ -3,6 +3,7 @@
 #include "global_objects.h"
 #include "graphics.h"
 #include "help_window.h"
+#include "testing/tests.h"
 #include <ncurses.h>
 #include <string.h>
 
@@ -23,22 +24,8 @@ int main() {
     getmaxyx(stdscr, screen_height, screen_width);
 
     init_global_objects();
-
-    Entity *student = createEntity("Student", 3, 20);
-    Entity *teacher = createEntity("Teacher", 80, 18);
-
-    addProperty(student, "student_id", "int");
-    addProperty(student, "Adress", "str");
-    addProperty(student, "Phone_num", "str");
-
-    addProperty(teacher, "Adress", "str");
-    addProperty(teacher, "LICENCE", "str");
-    addProperty(teacher, "SPECIALITY", "str");
-
-    Relationship *r = addRelationship(30, 20, student, teacher, "Teach");
-    addPropertyRelationship(r, "Number_stu", "int");
-    addPropertyRelationship(r, "Years_teaching", "int");
-    addCardinalityAPI("1,n,n,1", r);
+    // test diagram
+    setup_large_e_commerce_delivery_mcd();
 
     WINDOW *console_win = create_console_window();
     char input_buffer[256] = "";
@@ -232,10 +219,10 @@ int main() {
                     switch (ch) {
                     case 'j':
                         curr_main_scrolling_line++;
-                        // int max_vis_row = get_max_visible_row(curr_main_scrolling_line, Main);
-                        // if (max_vis_row >= PAD_HOTKEYS_OFFSET - 1) {
-                        //     curr_main_scrolling_line = 1;
-                        //}
+                        int max_vis_row = get_max_visible_row(curr_main_scrolling_line, Main);
+                        if (max_vis_row >= PAD_HOTKEYS_OFFSET - 1) {
+                            curr_main_scrolling_line = 1;
+                        }
                         break;
                     case 'k':
                         (curr_main_scrolling_line--);

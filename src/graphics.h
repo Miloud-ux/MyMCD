@@ -59,6 +59,11 @@ void draw_console_prompt(WINDOW *console_win, const char *input, status status);
 void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, HelpPage page, HelpAction Action,
                       WINDOW *scrolling_pad);
 
+/* hovering_search_matches is a flag
+ * to indicate we are done searching and we are hovering
+ * between matches and as a result don't refresh the help_window
+ * since it's containing the highlighted results*/
+
 void revert_back_to_console(WINDOW *console_win, status *status, bool *needs_redraw);
 void search_help(WINDOW *win, HelpWindow *hwin, char search_buffer[], int search_len, HelpAction *action, HelpPage page,
                  WINDOW *scrolling_pad);

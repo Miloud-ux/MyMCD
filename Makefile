@@ -11,6 +11,7 @@ SRC = src/main.c \
       src/DSA/vec.c \
       src/Lexer/parse.c \
       src/Lexer/tokenize.c \
+      src/testing/tests.c \
 	  src/command_processor.c \
 	  src/help_window.c \
       src/DSA/pqueue.c
