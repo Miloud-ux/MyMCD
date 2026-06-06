@@ -1,6 +1,4 @@
-#ifndef HELP_WINDOW_H
-#define HELP_WINDOW_H
-
+#pragma once
 /* This header is used to contain all the functions
  * related to the help win and the structs/enums
  * related to it
@@ -16,10 +14,11 @@
 #include <stddef.h>
 
 #define MAX_LINES_PER_PAGE 17
-#define MAX_DIALOGE_LEN 78 // equal to the width of the help window - 2
 #define MAX_TOKENS_PER_LINE 80
+#define MAX_SEARCH_BUFFER_LEN 256
 
 typedef enum LineType {
+    // TODO: implement Better Rendering
     p,    // regular text
     h,    // only for the first scroll ( top most title )
     h1,   //  HTML like
@@ -41,7 +40,6 @@ typedef struct HelpLine {
         size_t line_len; // equal to the pos of the last token
         LineType type;
         int line_start; // position on the page
-
 } HelpLine;
 
 typedef struct HelpPageData {
@@ -60,4 +58,3 @@ typedef struct HelpWindow {
 void init_help_window(HelpWindow *win, HelpPage current_page);
 void set_current_page(HelpWindow *win, HelpPage page);
 void set_scrolling_line(HelpWindow *win, int line);
-#endif // !HELP_WINDOW_H
