@@ -231,62 +231,62 @@ void drawConnectionAStar(Relationship *r) {
 
     switch (ap1.side) {
     case SIDE_LEFT:
-        start1_x--;
+        start1_x -= 1;
         break;
     case SIDE_RIGHT:
-        start1_x++;
+        start1_x += 1;
         break;
     case SIDE_TOP:
-        start1_y--;
+        start1_y -= 1;
         break;
     case SIDE_BOTTOM:
-        start1_y++;
+        start1_y += 1;
         break;
     }
     switch (ap_rel_e1.side) {
     case SIDE_LEFT:
-        end1_x--;
+        end1_x -= 1;
         break;
     case SIDE_RIGHT:
-        end1_x++;
+        end1_x += 1;
         break;
     case SIDE_TOP:
-        end1_y--;
+        end1_y -= 1;
         break;
     case SIDE_BOTTOM:
-        end1_y++;
+        end1_y += 1;
         break;
     }
     switch (ap_rel_e2.side) {
     case SIDE_LEFT:
-        start2_x--;
+        start2_x -= 1;
         break;
     case SIDE_RIGHT:
-        start2_x++;
+        start2_x += 1;
         break;
     case SIDE_TOP:
-        start2_y--;
+        start2_y -= 1;
         break;
     case SIDE_BOTTOM:
-        start2_y++;
+        start2_y += 1;
         break;
     }
     switch (ap2.side) {
     case SIDE_LEFT:
-        end2_x--;
+        end2_x -= 1;
         break;
     case SIDE_RIGHT:
-        end2_x++;
+        end2_x += 1;
         break;
     case SIDE_TOP:
-        end2_y--;
+        end2_y -= 1;
         break;
     case SIDE_BOTTOM:
-        end2_y++;
+        end2_y += 1;
         break;
     }
 
-    int margin = 10;
+    int margin = 10; // margin for ?
 
     // path 1: entity1 --> relationship
     AStarGrid *grid1 = astar_create_grid(start1_x, start1_y, end1_x, end1_y, margin);
@@ -332,10 +332,42 @@ void drawConnectionAStar(Relationship *r) {
         astar_free_path(path2);
     }
     astar_free_grid(grid2);
-    if (r->cards[0])
+
+    if (r->cards[0]) {
+        switch (ap1.side) {
+        case SIDE_LEFT:
+            // TODO better cords
+            ap1.x -= 2;
+            break;
+        case SIDE_RIGHT:
+            ap1.x += 1;
+            break;
+        case SIDE_TOP:
+            ap1.y -= 1;
+            break;
+        case SIDE_BOTTOM:
+            ap1.y += 1;
+            break;
+        }
         mvprintw(ap1.y, ap1.x, "%s", r->cards[0]->value);
-    if (r->cards[1])
+    }
+    if (r->cards[1]) {
+        switch (ap2.side) {
+        case SIDE_LEFT:
+            ap2.x -= 1;
+            break;
+        case SIDE_RIGHT:
+            ap2.x += 1;
+            break;
+        case SIDE_TOP:
+            ap2.y -= 1;
+            break;
+        case SIDE_BOTTOM:
+            ap2.y += 1;
+            break;
+        }
         mvprintw(ap2.y, ap2.x, "%s", r->cards[1]->value);
+    }
 }
 
 void drawConnection(Relationship *r) { drawConnectionAStar(r); }

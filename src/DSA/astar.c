@@ -2,33 +2,28 @@
 #include "pqueue.h"
 #include <limits.h>
 
-static int heuristic(int x1, int y1, int x2, int y2) {
-    return abs(x1 - x2) + abs(y1 - y2);
-}
+static int heuristic(int x1, int y1, int x2, int y2) { return abs(x1 - x2) + abs(y1 - y2); }
 static AStarNode *get_node(AStarGrid *grid, int x, int y) {
     // convert screen coords to grid coords
     int grid_x = x - grid->offset_x;
     int grid_y = y - grid->offset_y;
 
     // check bounds
-    if (grid_x < 0 || grid_x >= grid->width || grid_y < 0 ||
-        grid_y >= grid->height) {
+    if (grid_x < 0 || grid_x >= grid->width || grid_y < 0 || grid_y >= grid->height) {
         return NULL;
     }
 
     return &grid->nodes[grid_y][grid_x];
 }
 
-static void get_neighbors(AStarGrid *grid, AStarNode *node,
-                          AStarNode *neighbors[4]) {
+static void get_neighbors(AStarGrid *grid, AStarNode *node, AStarNode *neighbors[4]) {
     // Up, Down, Left, Right (no diagonals for orthogonal movement)
     neighbors[0] = get_node(grid, node->x, node->y - 1); // Up
     neighbors[1] = get_node(grid, node->x, node->y + 1); // Down
     neighbors[2] = get_node(grid, node->x - 1, node->y); // Left
     neighbors[3] = get_node(grid, node->x + 1, node->y); // Right
 }
-AStarGrid *astar_create_grid(int start_x, int start_y, int end_x, int end_y,
-                             int margin) {
+AStarGrid *astar_create_grid(int start_x, int start_y, int end_x, int end_y, int margin) {
     int min_x = (start_x < end_x ? start_x : end_x) - margin;
     int min_y = (start_y < end_y ? start_y : end_y) - margin;
     int max_x = (start_x > end_x ? start_x : end_x) + margin;
@@ -57,28 +52,24 @@ AStarGrid *astar_create_grid(int start_x, int start_y, int end_x, int end_y,
     }
     return grid;
 }
-void astar_mark_obstacle(AStarGrid *grid, int box_x, int box_y, int width,
-                         int height) {
+void astar_mark_obstacle(AStarGrid *grid, int box_x, int box_y, int width, int height) {
     for (int y = box_y; y < box_y + height; y++) {
         for (int x = box_x; x < box_x + width; x++) {
             int grid_x = x - grid->offset_x;
             int grid_y = y - grid->offset_y;
 
-            if (grid_x >= 0 && grid_x < grid->width && grid_y >= 0 &&
-                grid_y < grid->height) {
+            if (grid_x >= 0 && grid_x < grid->width && grid_y >= 0 && grid_y < grid->height) {
                 grid->nodes[grid_y][grid_x].is_obstacle = true;
             }
         }
     }
 }
 
-AStarPath *astar_find_path(AStarGrid *grid, int start_x, int start_y, int end_x,
-                           int end_y) {
+AStarPath *astar_find_path(AStarGrid *grid, int start_x, int start_y, int end_x, int end_y) {
     AStarNode *start_node = get_node(grid, start_x, start_y);
     AStarNode *end_node = get_node(grid, end_x, end_y);
 
-    if (!start_node || !end_node || start_node->is_obstacle ||
-        end_node->is_obstacle) {
+    if (!start_node || !end_node || start_node->is_obstacle || end_node->is_obstacle) {
         return NULL;
     }
 
@@ -144,16 +135,13 @@ AStarPath *astar_find_path(AStarGrid *grid, int start_x, int start_y, int end_x,
                     int curr_dir_y = neighbor->y - current->y;
 
                     // if direction changes (turn detected) add penalty
-                    if (!(prev_dir_x == curr_dir_x &&
-                          prev_dir_y == curr_dir_y)) {
-                        new_g_cost +=
-                            2; // Turn penalty to reduce staircase effect
+                    if (!(prev_dir_x == curr_dir_x && prev_dir_y == curr_dir_y)) {
+                        new_g_cost += 3; // Turn penalty to reduce staircase effect
                     }
                 }
 
                 neighbor->g_cost = new_g_cost;
-                neighbor->h_cost =
-                    heuristic(neighbor->x, neighbor->y, end_x, end_y);
+                neighbor->h_cost = heuristic(neighbor->x, neighbor->y, end_x, end_y);
                 neighbor->f_cost = neighbor->g_cost + neighbor->h_cost;
                 neighbor->parent = current;
 
