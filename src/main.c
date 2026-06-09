@@ -3,7 +3,6 @@
 #include "global_objects.h"
 #include "graphics.h"
 #include "help_window.h"
-#include "testing/tests.h"
 #include <ncurses.h>
 #include <string.h>
 
@@ -25,7 +24,6 @@ int main() {
 
     init_global_objects();
     // test diagram
-    setup_large_e_commerce_delivery_mcd();
 
     WINDOW *console_win = create_console_window();
     char input_buffer[256] = "";
