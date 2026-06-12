@@ -46,6 +46,8 @@ static void setup_large_e_commerce_delivery_mcd(void) {
 
 int main() {
     initscr();
+    // =>>
+
     initColors();
 
     cbreak();
@@ -54,7 +56,7 @@ int main() {
 
     // TODO: move to graphics.h header
     enum fps { SIXTY = 16, THIRTY = 30 }; // 60, 30 fps
-    enum fps update_interval = THIRTY;
+    enum fps update_interval = SIXTY;
     timeout(update_interval);
 
     int screen_height, screen_width;
@@ -96,20 +98,16 @@ int main() {
 
     // init scrolling pad
     WINDOW *scrolling_pad = init_pad(PAD_LINES, PAD_COLS, hwin);
-    setup_large_e_commerce_delivery_mcd();
-    // Drawing
-    erase();
-    draw_all_entities(global_objects, 0, moving);
-    draw_all_relationships(global_objects, 0, moving);
-    draw_console_prompt(console_win, input_buffer, status);
-    refresh();
 
     bool is_running = true;
     bool needs_redraw = false;
-    int fps_counter = 0;
+
+    // Drawing
+    setup_large_e_commerce_delivery_mcd();
+    draw_all_and_refresh(screen_width, &moving, &needs_redraw);
+    draw_console_prompt(console_win, input_buffer, status);
 
     while (is_running) {
-        fps_counter++;
         if (needs_redraw) {
             draw_all_and_refresh(screen_width, &moving, &needs_redraw);
         }
@@ -117,7 +115,7 @@ int main() {
         switch (status) {
         case Typing:
         case Editing:
-            draw_console_prompt(console_win, input_buffer, status); // has it's own refresh  (not anymore)
+            draw_console_prompt(console_win, input_buffer, status);
             int ch = getch();
             if (ch == ERR) {
                 continue;
@@ -131,7 +129,6 @@ int main() {
                     last_status = Help;
                     curs_set(0); // UPDATE => hide cursor while help is open, cursor warping is the flicker
                 } else if (strlen(input_buffer) == 0) {
-                    continue;
                     // mvwprintw(stdscr, screen_height / 2, screen_width / 2, "UPDATED");
                 } else {
                     da_execute(console_win, input_buffer, &needs_redraw);
