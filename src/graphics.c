@@ -1,10 +1,11 @@
 #include "graphics.h"
 #include "DSA/astar.h"
 #include "DSA/kmp.h"
+#include "DSA/vec.h"
 #include "help_window.h"
-#include "vec.h"
 #include <ncurses.h>
 #include <string.h>
+#include <time.h>
 
 enum status last_status = Typing;
 
@@ -387,6 +388,29 @@ WINDOW *create_console_window() {
     return console_win;
 }
 
+// UPDATE => own persistent WINDOW for help so draw_help_window never
+//           touches console_win and werase() never blanks the wrong surface
+WINDOW *create_help_window() {
+    int std_screen_width, std_screen_height;
+    getmaxyx(stdscr, std_screen_height, std_screen_width);
+
+    int h = HELP_WIN_HEIGHT;
+    int w = HELP_WIN_WIDTH;
+    if (h >= std_screen_height - 2)
+        h = std_screen_height - 2;
+    if (w >= std_screen_width - 2)
+        w = std_screen_width - 2;
+
+    int y = (std_screen_height - h) / 2;
+    int x = (std_screen_width - w) / 2;
+    WINDOW *win = newwin(h, w, y, x);
+    // UPDATE => leaveok stops ncurses repositioning the physical cursor after
+    //           every draw call; cursor jumping between mvwprintw calls is what
+    //           causes the flicker on Wayland
+    leaveok(win, TRUE);
+    return win;
+}
+
 void draw_console_prompt(WINDOW *console_win, const char *input, status status) {
     int win_height = getmaxy(console_win);
     int win_width = getmaxx(console_win);
@@ -425,7 +449,12 @@ void draw_console_prompt(WINDOW *console_win, const char *input, status status) 
         wprintw(console_win, "%s", input);
         wattroff(console_win, A_BOLD);
 
-        wrefresh(console_win);
+        // UPDATE => wnoutrefresh+doupdate instead of wrefresh so console never
+        //           triggers a mid-frame physical write while help is composing.
+        //           doupdate must live here — if it's outside in main.c it only
+        //           fires after the next getch() unblocks, causing 1-frame lag.
+        wnoutrefresh(console_win);
+        doupdate();
     }
 }
 
@@ -445,10 +474,11 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
     int help_win_y = (std_screen_height - h) / 2;
     int help_win_x = (std_screen_width - w) / 2;
 
-    // if (last_status == Editing || last_status == Typing) {
-    wresize(win, h, w);
-    mvwin(win, help_win_y, help_win_x);
-    //}
+    // UPDATE => wresize+mvwin removed from per-frame draw; create_help_window
+    //           already positions the window correctly. Calling mvwin every frame
+    //           forces a full terminal repaint on Wayland which is the flicker.
+    //           Re-add here only if you implement terminal resize handling (SIGWINCH).
+
     werase(win);
     box(win, 0, 0);
 
@@ -475,23 +505,23 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
         smaxrow = help_win_y + h - 4;
     }
 
-    wrefresh(win);
-
-    // touchwin(win); // force ncurses to not-optimise and draw the whole window (didn't work)
+    wnoutrefresh(win);
+    //  touchwin(win);  force ncurses to not-optimise and draw the whole window (didn't work)
 
     switch (page) {
     case Main:
-        prefresh(scrolling_pad, hwin->main_scrolling_line, 0, sminrow, smincol, smaxrow, smaxcol);
+        pnoutrefresh(scrolling_pad, hwin->main_scrolling_line, 0, sminrow, smincol, smaxrow, smaxcol);
         break;
     case Hotkeys:
-        prefresh(scrolling_pad, PAD_HOTKEYS_OFFSET + hwin->hotkey_scrolling_line, 0, sminrow, smincol, smaxrow, smaxcol);
+        pnoutrefresh(scrolling_pad, PAD_HOTKEYS_OFFSET + hwin->hotkey_scrolling_line, 0, sminrow, smincol, smaxrow,
+                     smaxcol);
         break;
     case Examples:
-        prefresh(scrolling_pad, PAD_EXAMPLES_OFFSET + hwin->examples_scrolling_line, 0, sminrow, smincol, smaxrow,
-                 smaxcol);
+        pnoutrefresh(scrolling_pad, PAD_EXAMPLES_OFFSET + hwin->examples_scrolling_line, 0, sminrow, smincol, smaxrow,
+                     smaxcol);
         break;
     }
-
+    doupdate();
     // mvwprintw(win, smaxrow - 2, (w / 2) - 16, "  Press 'q' to quit  ");
     // wrefresh(win);
 }
@@ -531,12 +561,23 @@ void draw_all_relationships(GlobalObjects global_objects, int moving_index, bool
 }
 
 void draw_all_and_refresh(int screen_width, bool *moving, bool *needs_redraw) {
+    // UPDATE => frame timing: measures microseconds for the full draw+flush cycle
+    struct timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+
     moving = false;
     erase();
     mvprintw(0, screen_width / 2 - 10, "MCD Tool - Type 'help' for commands");
     draw_all_entities(global_objects, 0, moving);
     draw_all_relationships(global_objects, 0, moving);
-    refresh();
+    // queue stdscr — console_win's doupdate inside draw_console_prompt
+    // will flush both together when called right after this in the main loop
+    wnoutrefresh(stdscr);
+
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    long us = (t1.tv_sec - t0.tv_sec) * 1000000L + (t1.tv_nsec - t0.tv_nsec) / 1000L;
+    mvprintw(0, 0, "frame: %4ldus", us);
+
     *needs_redraw = false;
 }
 
@@ -574,6 +615,7 @@ void revert_back_to_console(WINDOW *console_win, status *status, bool *needs_red
     wresize(console_win, CONSOLE_HEIGHT, screen_width);
     mvwin(console_win, console_y, 0);
     werase(console_win);
+    curs_set(1); // UPDATE => restore cursor when returning to console
 
     *needs_redraw = true;
 }
@@ -635,7 +677,9 @@ void search_help(WINDOW *win, HelpWindow *hwin, char search_buffer[], int search
                         searching = false;
                         break;
                     }
-                    wrefresh(win);
+                    // UPDATE => batch into doupdate, no mid-frame physical write
+                    wnoutrefresh(win);
+                    doupdate();
                 }
                 destroy_search_results(matches);
             }
@@ -712,5 +756,7 @@ void highlight_search_matches(HelpWindow *hwin, WINDOW *win, SearchResult *match
             }
         }
     }
-    wrefresh(win);
+    // UPDATE => batch into doupdate, no mid-frame physical write
+    wnoutrefresh(win);
+    doupdate();
 }

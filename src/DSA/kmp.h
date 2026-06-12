@@ -1,5 +1,6 @@
 #pragma once
-#include "help_window.h"
+#include "../help_window.h"
+#include <stdio.h>
 
 typedef struct SearchResult {
         int *idx;

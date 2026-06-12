@@ -6,6 +6,44 @@
 #include <ncurses.h>
 #include <string.h>
 
+// Profiling only
+
+static void setup_large_e_commerce_delivery_mcd(void) {
+    Entity *customer = createEntity("Customer", 5, 5);
+    addProperty(customer, "customer_id", "int");
+    addProperty(customer, "first_name", "str");
+
+    Entity *shopping_cart = createEntity("Cart", 50, 5);
+    addProperty(shopping_cart, "cart_id", "int");
+
+    Entity *order = createEntity("Order", 95, 5);
+    addProperty(order, "order_id", "int");
+
+    Entity *product = createEntity("Product", 140, 5);
+    addProperty(product, "product_id", "int");
+
+    Entity *delivery = createEntity("Delivery", 5, 27);
+    addProperty(delivery, "track_num", "str");
+
+    Entity *warehouse = createEntity("Warehouse", 95, 27);
+    addProperty(warehouse, "capacity", "int");
+
+    Relationship *r_owns = addRelationship(31, 5, customer, shopping_cart, "Owns");
+    addCardinalityAPI("1,1,0,1", r_owns);
+
+    Relationship *r_checkout = addRelationship(76, 5, shopping_cart, order, "Checkout");
+    addCardinalityAPI("0,1,1,1", r_checkout);
+
+    Relationship *r_order_line = addRelationship(121, 5, order, product, "Ord_Line");
+    addCardinalityAPI("1,n,0,n", r_order_line);
+
+    Relationship *r_fulfilled = addRelationship(25, 16, order, delivery, "ShipsVia");
+    addCardinalityAPI("0,1,1,1", r_fulfilled);
+
+    Relationship *r_stocks = addRelationship(121, 16, warehouse, product, "Stocks");
+    addCardinalityAPI("1,n,0,n", r_stocks);
+}
+
 int main() {
     initscr();
     initColors();
@@ -25,7 +63,9 @@ int main() {
     init_global_objects();
     // test diagram
 
+    // == WINDOWS ==
     WINDOW *console_win = create_console_window();
+    WINDOW *help_win = create_help_window();
     char input_buffer[256] = "";
     int input_len = 0;
     char search_buffer[MAX_SEARCH_BUFFER_LEN] = "";
@@ -56,7 +96,7 @@ int main() {
 
     // init scrolling pad
     WINDOW *scrolling_pad = init_pad(PAD_LINES, PAD_COLS, hwin);
-
+    setup_large_e_commerce_delivery_mcd();
     // Drawing
     erase();
     draw_all_entities(global_objects, 0, moving);
@@ -77,7 +117,7 @@ int main() {
         switch (status) {
         case Typing:
         case Editing:
-            draw_console_prompt(console_win, input_buffer, status); // has it's own refresh
+            draw_console_prompt(console_win, input_buffer, status); // has it's own refresh  (not anymore)
             int ch = getch();
             if (ch == ERR) {
                 continue;
@@ -89,6 +129,10 @@ int main() {
                 } else if (strcmp(input_buffer, "help") == 0) {
                     status = Help;
                     last_status = Help;
+                    curs_set(0); // UPDATE => hide cursor while help is open, cursor warping is the flicker
+                } else if (strlen(input_buffer) == 0) {
+                    continue;
+                    // mvwprintw(stdscr, screen_height / 2, screen_width / 2, "UPDATED");
                 } else {
                     da_execute(console_win, input_buffer, &needs_redraw);
                 }
@@ -107,6 +151,7 @@ int main() {
             } else if (ch == '\t') {
                 status = Editing;
                 last_status = Editing;
+                curs_set(0); // UPDATE => hide cursor during move mode, rapid redraws make it flash on Wayland
                 int entity_index = 0;
                 int relationship_index = 0;
                 bool switching_moving_type = true;
@@ -145,10 +190,10 @@ int main() {
                                 moving = false;
                                 break;
                             }
-                            erase();
-                            draw_all_relationships(global_objects, relationship_index, moving_relationship);
-                            draw_all_entities(global_objects, entity_index, moving);
-                            refresh();
+                            // erase();
+                            //  UPDATE => wnoutrefresh(stdscr) instead of refresh() so stdscr and
+                            //            console_win flush together in one doupdate inside draw_console_prompt
+                            draw_all_and_refresh(screen_width, &moving, &needs_redraw);
                             // TODO : implement a public API to choose whether to make call a draw
                             //  help console or a command console func
                             draw_console_prompt(console_win, input_buffer, status);
@@ -182,10 +227,8 @@ int main() {
                                 moving = false;
                                 break;
                             }
-                            erase();
-                            draw_all_entities(global_objects, entity_index, moving_entity);
-                            draw_all_relationships(global_objects, relationship_index, moving);
-                            refresh();
+                            // TODO: remove timing profiling before release
+                            draw_all_and_refresh(screen_width, &moving, &needs_redraw);
                             draw_console_prompt(console_win, input_buffer, status);
                         }
                         break;
@@ -194,6 +237,7 @@ int main() {
                         switching_moving_type = false;
                         status = Typing;
                         last_status = Typing;
+                        curs_set(1);         // UPDATE => restore cursor when leaving move mode
                         needs_redraw = true; // TODO: review this (used after setting new time interval and checkinf for
                                              // err for getch())
                         break;
@@ -209,7 +253,8 @@ int main() {
                 bool isscrolling = true;
 
                 while (isscrolling) {
-                    draw_help_window(console_win, &hwin, search_buffer, page, Action, scrolling_pad);
+                    // UPDATE => use help_win instead of console_win
+                    draw_help_window(help_win, &hwin, search_buffer, page, Action, scrolling_pad);
                     int ch = getch();
                     if (ch == ERR) {
                         continue;
@@ -238,7 +283,8 @@ int main() {
                         curr_main_scrolling_line = 1;
                         break;
                     case '/':
-                        search_help(console_win, &hwin, search_buffer, search_len, &Action, page, scrolling_pad);
+                        // UPDATE => use help_win instead of console_win
+                        search_help(help_win, &hwin, search_buffer, search_len, &Action, page, scrolling_pad);
                         break;
 
                     case 'q':
@@ -258,7 +304,8 @@ int main() {
                 bool Hotkeys_isscrolling = true;
 
                 while (Hotkeys_isscrolling) {
-                    draw_help_window(console_win, &hwin, search_buffer, page, Action, scrolling_pad);
+                    // UPDATE => use help_win instead of console_win
+                    draw_help_window(help_win, &hwin, search_buffer, page, Action, scrolling_pad);
                     int ch = getch();
                     if (ch == ERR) {
                         continue;
@@ -288,7 +335,8 @@ int main() {
                         curr_hotkey_scrolling_line = 1;
                         break;
                     case '/':
-                        search_help(console_win, &hwin, search_buffer, search_len, &Action, page, scrolling_pad);
+                        // UPDATE => use help_win instead of console_win
+                        search_help(help_win, &hwin, search_buffer, search_len, &Action, page, scrolling_pad);
                         break;
 
                     case 'q':
@@ -307,7 +355,8 @@ int main() {
                 bool Examples_isscrolling = true;
 
                 while (Examples_isscrolling) {
-                    draw_help_window(console_win, &hwin, search_buffer, page, Action, scrolling_pad);
+                    // UPDATE => use help_win instead of console_win
+                    draw_help_window(help_win, &hwin, search_buffer, page, Action, scrolling_pad);
                     int ch = getch();
                     if (ch == ERR) {
                         continue;
@@ -336,7 +385,8 @@ int main() {
                         Examples_isscrolling = false;
                         break;
                     case '/':
-                        search_help(console_win, &hwin, search_buffer, search_len, &Action, page, scrolling_pad);
+                        // UPDATE => use help_win instead of console_win
+                        search_help(help_win, &hwin, search_buffer, search_len, &Action, page, scrolling_pad);
                         break;
 
                     case 'q':
@@ -354,6 +404,8 @@ int main() {
     }
 
     delwin(console_win);
+    // UPDATE => clean up the dedicated help window
+    delwin(help_win);
     delwin(scrolling_pad);
     endwin();
     return 0;

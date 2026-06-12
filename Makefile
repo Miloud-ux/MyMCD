@@ -1,7 +1,8 @@
 CC     = gcc
-CFLAGS = -Wall -pg -g -Wextra -Isrc -Isrc/DSA
+CFLAGS = -Wall -g -Wextra -Isrc -Isrc/DSA
 LIBS   = -lncurses
 
+# Source files
 CORE_SRC = \
 	src/MCD_elements.c \
 	src/graphics.c \
@@ -18,6 +19,10 @@ CORE_SRC = \
 
 APP_SRC = src/main.c $(CORE_SRC)
 
+# Object files: every .c in APP_SRC gets a .o in build/
+OBJ_DIR = build
+APP_OBJ = $(patsubst src/%.c, $(OBJ_DIR)/%.o, $(APP_SRC))
+
 # === headless test source sets (no ncurses needed) ===
 TEST_ARENA_SRC   = src/testing/tests.c src/utils/arena_allocator.c
 TEST_LEXER_SRC   = src/testing/tests.c src/Lexer/tokenize.c
@@ -33,9 +38,21 @@ TARGET = main
 
 all: $(TARGET)
 
-$(TARGET):
-	$(CC) $(CFLAGS) -o $(TARGET) $(APP_SRC) $(LIBS)
+# Link
+$(TARGET): $(APP_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 	@echo "\n--- Built Main Application successfully ---"
+
+# Compile each .c to a .o, auto-generating header dependency files (.d)
+# -MMD -MP tells gcc to write a .d file listing every header the .c includes.
+# Make reads those .d files and knows to rebuild the .o (and therefore the binary)
+# whenever any included header changes, not just the .c itself.
+$(OBJ_DIR)/%.o: src/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
+
+# Pull in the generated dependency files so header changes trigger rebuilds
+-include $(APP_OBJ:.o=.d)
 
 # Headless suites: no -lncurses
 test_arena:
@@ -75,6 +92,7 @@ test_all: test_arena test_lexer test_parser test_mcd test_help
 	@echo "           help_test_results.log"
 
 clean:
+	rm -rf $(OBJ_DIR)
 	rm -f $(TARGET) test_arena test_lexer test_parser test_mcd test_help test_graphics \
 	      *.log gmon.out
 	@echo "Cleaned up all executables and generated files."

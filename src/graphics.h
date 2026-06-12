@@ -1,12 +1,11 @@
 #ifndef GRAPHICS_H
 #define GRAPHICS_H
 #include "DSA/astar.h"
+#include "DSA/kmp.h"
 #include "MCD_elements.h"
 #include "global_objects.h"
 #include "help_window.h"
-#include "kmp.h"
 #include <ncurses.h>
-#include <string.h>
 
 //  Windows and scrolling pad
 #define CONSOLE_HEIGHT 6 // console_win width = stdscr width
@@ -55,6 +54,8 @@ void draw_all_and_refresh(int screen_width, bool *moving, bool *needs_redraw);
  */
 
 WINDOW *create_console_window();
+// UPDATE => dedicated help WINDOW so it never shares state with console_win
+WINDOW *create_help_window();
 void draw_console_prompt(WINDOW *console_win, const char *input, status status);
 void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, HelpPage page, HelpAction Action,
                       WINDOW *scrolling_pad);
@@ -70,6 +71,8 @@ void search_help(WINDOW *win, HelpWindow *hwin, char search_buffer[], int search
 // Pad control (used for scrolling)
 WINDOW *init_pad(int num_lines, int num_col, HelpWindow hwin);
 
+// Todo: search why is it  static ? it's private to this file
+// and we are including this in main so it's fine for now
 static inline int get_max_visible_row(int start_row, int page_type) {
     switch (page_type) {
     case Main:
