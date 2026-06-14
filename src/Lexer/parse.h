@@ -47,7 +47,7 @@ typedef struct {
 } Element;
 
 void init_parser(Parser *p, const char *content);
-void parse_command(Parser *p, const char *content, WINDOW *console_win);
+bool parse_command(Parser *p, const char *content, WINDOW *console_win);
 // maybe in future implementation of error msg function we can add a simple
 // guess 'did you mean this "TOKEN"' then we have to pass the current token
 void error_msg(WINDOW *console_win, Parser *p, const char *error);
@@ -64,7 +64,7 @@ bool parse_add_property(Parser *p, WINDOW *console, AddCommand *c);
 bool parse_add_property_name(Parser *p, WINDOW *console, AddCommand *c);
 bool parse_add_property_type(Parser *p, WINDOW *console, AddCommand *c);
 Element *get_element_by_name(const char *name);
-void execute_addProperty(AddCommand c);
+bool execute_addProperty(AddCommand c);
 
 // clear command
 void parse_clear(Parser *p, WINDOW *console);

@@ -7,6 +7,7 @@
 #include "help_window.h"
 #include <ncurses.h>
 
+#define KEY_ESCAPE 27
 //  Windows and scrolling pad
 #define CONSOLE_HEIGHT 6 // console_win width = stdscr width
 #define HELP_WIN_HEIGHT 22

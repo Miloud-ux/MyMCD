@@ -47,20 +47,20 @@ Entity *createEntity(const char *name, int x, int y) {
     return e;
 }
 
-void addProperty(Entity *e, const char *prop_name, const char *prop_type) {
+bool addProperty(Entity *e, const char *prop_name, const char *prop_type) {
     if (e->num_properties >= MAX_PROPERTIES) {
-        return;
+        return false;
     }
 
     for (int i = 0; i < e->num_properties; i++) {
         if (strcmp(prop_name, e->properties[i]->name) == 0) {
-            return;
+            return false;
         }
     }
 
     Property *p1 = malloc(sizeof(Property));
     if (p1 == NULL) {
-        return;
+        return false;
     }
 
     strncpy(p1->name, prop_name, MAX_NAME_LEN - 1);
@@ -71,23 +71,24 @@ void addProperty(Entity *e, const char *prop_name, const char *prop_type) {
     if ((int)strlen(p1->name) + ((int)strlen(p1->type)) > (e->width - 2)) {
         e->width += strlen(p1->name) + strlen(p1->type);
     }
+    return true;
 }
 
-void addPropertyRelationship(Relationship *r, const char *prop_name, const char *prop_type) {
+bool addPropertyRelationship(Relationship *r, const char *prop_name, const char *prop_type) {
     if (r->num_properties >= MAX_PROPERTIES) {
-        return;
+        return false;
     }
 
     for (int i = 0; i < r->num_properties; i++) {
         if (strcmp(prop_name, r->properties[i]->name) == 0) {
             // add func expected()  to alert user
-            return;
+            return false;
         }
     }
 
     Property *p1 = malloc(sizeof(Property));
     if (p1 == NULL) {
-        return;
+        return false;
     }
 
     strncpy(p1->name, prop_name, MAX_NAME_LEN - 1);
@@ -98,6 +99,7 @@ void addPropertyRelationship(Relationship *r, const char *prop_name, const char 
     if ((int)strlen(p1->name) + ((int)strlen(p1->type)) > (r->width - 2)) {
         r->width += strlen(p1->name) + strlen(p1->type);
     }
+    return true;
 }
 
 void tokenizeCardinalityInput(const char *input, char *card1, char *card2) {

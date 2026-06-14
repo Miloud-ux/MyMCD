@@ -1,7 +1,5 @@
 #include "parse.h"
-#include "../MCD_elements.h"
-#include "global_objects.h"
-#include "ncurses.h"
+#include "../global_objects.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -54,11 +52,14 @@ void error_msg(WINDOW *console_win, Parser *p, const char *error) {
     wrefresh(console_win);
 }
 
-void parse_command(Parser *p, const char *content, WINDOW *console_win) {
+bool parse_command(Parser *p, const char *content, WINDOW *console_win) {
     // Root function that calls other child functions
     if (!content) {
-        return;
+        const char *error = "Error Parsing Command (String doesn't exist)";
+        error_msg(console_win, p, error);
+        return false;
     }
+
     init_parser(p, content);
     tokenize_content(content, p->tokens, &p->count);
 
@@ -75,28 +76,38 @@ void parse_command(Parser *p, const char *content, WINDOW *console_win) {
             AddCommand c = {0};
             advance_token(&p->current);
             if (parse_add(p, console_win, &c)) {
-                execute_addProperty(c);
+                if (execute_addProperty(c)) {
+                    continue;
+                } else {
+                    const char *error = "Failed to execute command for some reason";
+                    error_msg(console_win, p, error);
+                    break;
+                }
+            } else {
+                // parse_add() already alerted this error
+                return false;
             }
         } else if (t.type == TOKEN_HELP) {
-            // parse_help(p);
+            // Handled in main
         } else if (t.type == TOKEN_CLEAR) {
             advance_token(&p->current);
             parse_clear(p, console_win);
         } else if (t.type == TOKEN_EOF) {
             break;
-        } else {
+        } else if (t.type == TOKEN_UNKNOWN) {
             // Unknown token
             // Maybe create an "error" struct to avoid passing console ?
 
-            //  === debugging only ===
-            // char debug_msg[256];
-            // snprintf(debug_msg, sizeof(debug_msg),
-            //          "Unknown token type = %d, value=%s", t.type, t.value);
-            // show_message(console_win, debug_msg);
+            //== = debugging only == =
+            char debug_msg[256];
+            snprintf(debug_msg, sizeof(debug_msg), "Unknown token type = %d, value=%s", t.type, t.value);
+            error_msg(console_win, p, debug_msg);
 
+            return false;
+        } else {
             const char *error = "Unknown command try : {create, help,clear}";
             error_msg(console_win, p, error);
-            return;
+            return false;
         }
     }
 }
@@ -224,6 +235,12 @@ bool parse_add_property(Parser *p, WINDOW *console, AddCommand *c) {
     Token t = peek_token(p->tokens, p->current);
     if (t.type == TOKEN_STRING) {
         // name of the entity/relationship
+
+        if (strlen(t.value) == 0) {
+            const char *error = "Empty Entity/Relationship name";
+            error_msg(console, p, error);
+            return false;
+        }
         strncpy(c->identifier_name, t.value, MAX_NAME_LEN); // check for empty string ?
         c->identifier_name[MAX_NAME_LEN - 1] = '\0';
         // Now get the actual property name and type:
@@ -241,15 +258,22 @@ bool parse_add_property(Parser *p, WINDOW *console, AddCommand *c) {
 
 bool parse_add_property_name(Parser *p, WINDOW *console, AddCommand *c) {
     Token t = peek_token(p->tokens, p->current);
+
     if (t.type == TOKEN_STRING) {
+        if (strlen(t.value) == 0) {
+            const char *error = "Empty property name";
+            error_msg(console, p, error);
+            return false;
+        }
         strncpy(c->prop_name, t.value, MAX_NAME_LEN);
         c->prop_name[MAX_NAME_LEN - 1] = '\0';
+
         advance_token(&p->current);
+
         if (parse_add_property_type(p, console, c)) {
             return true;
         }
     } else {
-        // Error expected : Property name
         const char *error = "Expected a property name";
         error_msg(console, p, error);
     }
@@ -258,17 +282,21 @@ bool parse_add_property_name(Parser *p, WINDOW *console, AddCommand *c) {
 
 bool parse_add_property_type(Parser *p, WINDOW *console, AddCommand *c) {
     Token t = peek_token(p->tokens, p->current);
-    if (t.type == TOKEN_IDENTIFIER) {
+    switch (t.type) {
+    case TOKEN_INT_TYPE:
+    case TOKEN_STRING_TYPE:
+    case TOKEN_DOUBLE_TYPE:
+    case TOKEN_DATE_TYPE:
+    case TOKEN_MONEY_TYPE:
         strncpy(c->prop_type, t.value, MAX_TYPE_LEN);
         c->prop_type[MAX_TYPE_LEN - 1] = '\0';
-        // needs better error handling
+        advance_token(&p->current);
         return true;
-    } else {
-        // Error expected : Property type
-        const char *error = "Expected a property type";
+    default:
+        const char *error = "Expected a property type(money, str, date, int, double)";
         error_msg(console, p, error);
+        return false;
     }
-    return false;
 }
 
 Element *get_element_by_name(const char *name) {
@@ -289,25 +317,30 @@ Element *get_element_by_name(const char *name) {
         // because here it will add the property to the entity even
         // if a relationship exist with that name
         Relationship *r = search_relationship(name);
+        if (!r) {
+            return NULL;
+        }
         el->type = TYPE_RELATIONSHIP;
         el->Element.r = r;
         return el;
     }
 }
-void execute_addProperty(AddCommand c) {
+bool execute_addProperty(AddCommand c) {
     Element *el = get_element_by_name(c.identifier_name);
     if (!el) {
-        return;
+        return false;
     }
 
     if (el->type == TYPE_ENTITY) {
-        addProperty(el->Element.e, c.prop_name, c.prop_type);
-        // TODO: change return type for add proprety to boolean
-        return;
+        if (addProperty(el->Element.e, c.prop_name, c.prop_type)) {
+            return true;
+        }
     } else {
-        addPropertyRelationship(el->Element.r, c.prop_name, c.prop_type);
-        return;
+        if (addPropertyRelationship(el->Element.r, c.prop_name, c.prop_type)) {
+            return true;
+        }
     }
+    return false;
 }
 
 void parse_clear(Parser *p, WINDOW *console) { init_global_objects(); }

@@ -1,6 +1,7 @@
 #ifndef SCR_MCD_ELEMENTS_H_
 #define SCR_MCD_ELEMENTS_H_
 
+#include <stdbool.h>
 #define MAX_NAME_LEN 15 // old val = 14
 #define MAX_TYPE_LEN 6
 #define CARDINALITY_LEN 4
@@ -53,12 +54,12 @@ typedef struct {
 } AttachPoint;
 
 Entity *createEntity(const char *name, int x, int y);
-void addProperty(Entity *e, const char *prop_name, const char *prop_type);
+bool addProperty(Entity *e, const char *prop_name, const char *prop_type);
 Relationship *addRelationship(int x, int y, Entity *e1, Entity *e2, const char *name);
 void addCardinality(const char *input, Cardinality *c1, Cardinality *c2);
 void tokenizeCardinalityInput(const char *input, char *card1, char *card2);
 void addCardinalityAPI(const char *input, Relationship *r);
-void addPropertyRelationship(Relationship *r, const char *prop_name, const char *prop_type);
+bool addPropertyRelationship(Relationship *r, const char *prop_name, const char *prop_type);
 AttachPoint findBestAttachPoint(int box_x, int box_y, int box_width, int box_height, int target_x, int target_y);
 
 Entity *search_entity(const char *name);

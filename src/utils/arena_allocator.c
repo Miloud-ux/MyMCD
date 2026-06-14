@@ -8,13 +8,6 @@
 #include <sys/mman.h>
 #endif
 
-// memory alignment
-#define DEFAULT_ALIGNMENT (2 * sizeof(void *)) // 16 bytes (for 64bit arch)
-
-// useful macros
-#define ARENA_PUSH_OBJECT(arena, type) (type *)arena_alloc_aligned(arena, sizeof(type), DEFAULT_ALIGNMENT)
-#define ARENA_PUSH_ARRAY(arena, type, count) (type *)arena_alloc_aligned(arena, sizeof(type) * (count), DEFAULT_ALIGNMENT)
-
 void *os_alloc(size_t size) {
 #ifdef _WIN32
     return VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
@@ -102,10 +95,10 @@ void *arena_alloc_aligned(Arena *a, size_t size, size_t align) {
 // Temp arena
 TempArena init_temp_arena(Arena *a) {
     if (!a) {
-        return (TempArena){.a = NULL, .saved_block = NULL, .saved_block = 0};
+        return (TempArena){.a = NULL, .saved_block = NULL, .saved_offset = 0};
     }
 
-    return (TempArena){.a = a, .saved_block = a->current, .saved_offset = a->current->offset};
+    return (TempArena){.a = a, .saved_block = a->current, .saved_offset = a->current ? a->current->offset : 0};
 }
 
 void free_temp_arena(TempArena t) {
@@ -117,7 +110,7 @@ void free_temp_arena(TempArena t) {
 }
 
 void destroy_arena(Arena *a) {
-    ArenaBlock *curr = a->current;
+    ArenaBlock *curr = a->head;
     while (curr) {
         ArenaBlock *next = curr->next;
         size_t total_size = sizeof(ArenaBlock) + curr->cap;

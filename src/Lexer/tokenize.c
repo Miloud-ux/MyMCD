@@ -67,6 +67,16 @@ void tokenize_content(const char *content, Token tokens[], int *count) {
                 tokens[*count].type = TOKEN_PROPERTY;
             } else if (strcmp(tokens[*count].value, "clear") == 0) {
                 tokens[*count].type = TOKEN_CLEAR;
+            } else if (strcmp(tokens[*count].value, "money") == 0) {
+                tokens[*count].type = TOKEN_MONEY_TYPE;
+            } else if (strcmp(tokens[*count].value, "int") == 0) {
+                tokens[*count].type = TOKEN_INT_TYPE;
+            } else if (strcmp(tokens[*count].value, "str") == 0) {
+                tokens[*count].type = TOKEN_STRING_TYPE;
+            } else if (strcmp(tokens[*count].value, "double") == 0) {
+                tokens[*count].type = TOKEN_DOUBLE_TYPE;
+            } else if (strcmp(tokens[*count].value, "date") == 0) {
+                tokens[*count].type = TOKEN_DATE_TYPE;
             } else {
                 // testing
                 tokens[*count].type = TOKEN_IDENTIFIER;

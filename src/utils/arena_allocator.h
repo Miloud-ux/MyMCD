@@ -2,6 +2,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// memory alignment
+#define DEFAULT_ALIGNMENT (2 * sizeof(void *)) // 16 bytes (for 64bit arch)
+// useful macros
+#define ARENA_PUSH_OBJECT(arena, type) (type *)arena_alloc_aligned(arena, sizeof(type), DEFAULT_ALIGNMENT)
+#define ARENA_PUSH_ARRAY(arena, type, count) (type *)arena_alloc_aligned(arena, sizeof(type) * (count), DEFAULT_ALIGNMENT)
+
 typedef struct ArenaBlock {
         uintptr_t base;
         size_t cap;

@@ -14,6 +14,11 @@ typedef enum {
     TOKEN_IDENTIFIER,
     TOKEN_HELP,
     TOKEN_CLEAR,
+    TOKEN_INT_TYPE,
+    TOKEN_STRING_TYPE,
+    TOKEN_DOUBLE_TYPE,
+    TOKEN_DATE_TYPE,
+    TOKEN_MONEY_TYPE,
     TOKEN_UNKNOWN // for weird unicode chars like tilde or @
 } TokenType;
 

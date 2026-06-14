@@ -634,6 +634,12 @@ void search_help(WINDOW *win, HelpWindow *hwin, char search_buffer[], int search
         }
 
         if (search_char == '\n') {
+            if (search_len == 0) {
+                *action = Navigation;
+                search_len = 0;
+                search_buffer[0] = '\0';
+                return;
+            }
             SearchResult *matches = search_help_kmp(hwin, search_buffer, search_len);
             if (matches) {
                 highlight_search_matches(hwin, win, matches, search_buffer);
@@ -686,7 +692,7 @@ void search_help(WINDOW *win, HelpWindow *hwin, char search_buffer[], int search
 
             search_len = 0;
             search_buffer[0] = '\0';
-        } else if (search_char == 'q') {
+        } else if (search_char == KEY_ESCAPE) { // escape
             *action = Navigation;
             search_len = 0;
             search_buffer[0] = '\0';

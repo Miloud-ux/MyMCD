@@ -3,6 +3,7 @@
 #include "global_objects.h"
 #include "graphics.h"
 #include "help_window.h"
+#include "utils/arena_allocator.h"
 #include <ncurses.h>
 #include <string.h>
 
@@ -53,6 +54,7 @@ int main() {
     cbreak();
     noecho();
     keypad(stdscr, TRUE);
+    set_escdelay(50);
 
     // TODO: move to graphics.h header
     enum fps { SIXTY = 16, THIRTY = 30 }; // 60, 30 fps
@@ -106,6 +108,8 @@ int main() {
     setup_large_e_commerce_delivery_mcd();
     draw_all_and_refresh(screen_width, &moving, &needs_redraw);
     draw_console_prompt(console_win, input_buffer, status);
+    Arena a;
+    arena_init(&a, 1024 * 1024);
 
     while (is_running) {
         if (needs_redraw) {
@@ -131,7 +135,7 @@ int main() {
                 } else if (strlen(input_buffer) == 0) {
                     // mvwprintw(stdscr, screen_height / 2, screen_width / 2, "UPDATED");
                 } else {
-                    da_execute(console_win, input_buffer, &needs_redraw);
+                    da_execute(&a, console_win, input_buffer, &needs_redraw);
                 }
                 input_len = 0;
                 input_buffer[0] = '\0';
@@ -284,6 +288,7 @@ int main() {
                         search_help(help_win, &hwin, search_buffer, search_len, &Action, page, scrolling_pad);
                         break;
 
+                    case KEY_ESCAPE:
                     case 'q':
                         revert_back_to_console(console_win, &status, &needs_redraw);
                     // falls down
