@@ -3,4 +3,4 @@ gmon.out
 analysis.txt
 notes.md
 analysis.txt
-./src/build/
+build/
