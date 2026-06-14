@@ -11,6 +11,7 @@ CORE_SRC = \
 	src/DSA/kmp.c \
 	src/DSA/vec.c \
 	src/DSA/pqueue.c \
+	src/DSA/AST.c \
 	src/Lexer/parse.c \
 	src/Lexer/tokenize.c \
 	src/utils/arena_allocator.c \

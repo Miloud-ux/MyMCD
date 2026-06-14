@@ -1,4 +1,5 @@
 #include "astar.h"
+#include "../utils/arena_allocator.h"
 #include "pqueue.h"
 #include <limits.h>
 

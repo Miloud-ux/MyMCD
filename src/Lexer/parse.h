@@ -1,6 +1,6 @@
 #ifndef SRC_PARSE_H
 #define SRC_PARSE_H
-#include "../MCD_elements.h"
+#include "../DSA/AST.h"
 #include "tokenize.h"
 #include <ncurses.h>
 
@@ -11,43 +11,8 @@ typedef struct {
         const char *userInput;
 } Parser;
 
-typedef struct {
-        char name[MAX_NAME_LEN];
-} EntityInfo;
-
-typedef struct {
-        char name[MAX_NAME_LEN];
-        char e1_name[MAX_NAME_LEN];
-        char e2_name[MAX_NAME_LEN];
-} RelationshipInfo;
-
-typedef enum { TYPE_ENTITY, TYPE_RELATIONSHIP } ElementType;
-
-typedef struct {
-        ElementType type;
-        union {
-                EntityInfo e;
-                RelationshipInfo r;
-        } Data;
-} CreateCommand;
-
-typedef struct {
-        char identifier_name[MAX_NAME_LEN];
-        char prop_name[MAX_NAME_LEN];
-        char prop_type[MAX_TYPE_LEN];
-} AddCommand;
-
-// TODO: move this func to MCD_elements
-typedef struct {
-        ElementType type;
-        union {
-                Entity *e;
-                Relationship *r;
-        } Element;
-} Element;
-
 void init_parser(Parser *p, const char *content);
-bool parse_command(Parser *p, const char *content, WINDOW *console_win);
+bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_win);
 // maybe in future implementation of error msg function we can add a simple
 // guess 'did you mean this "TOKEN"' then we have to pass the current token
 void error_msg(WINDOW *console_win, Parser *p, const char *error);

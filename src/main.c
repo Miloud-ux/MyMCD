@@ -112,6 +112,8 @@ int main() {
     arena_init(&a, 1024 * 1024);
 
     while (is_running) {
+        AST tree;
+        init_AST(&tree);
         if (needs_redraw) {
             draw_all_and_refresh(screen_width, &moving, &needs_redraw);
         }
@@ -135,7 +137,7 @@ int main() {
                 } else if (strlen(input_buffer) == 0) {
                     // mvwprintw(stdscr, screen_height / 2, screen_width / 2, "UPDATED");
                 } else {
-                    da_execute(&a, console_win, input_buffer, &needs_redraw);
+                    da_execute(&tree, &a, console_win, input_buffer, &needs_redraw);
                 }
                 input_len = 0;
                 input_buffer[0] = '\0';

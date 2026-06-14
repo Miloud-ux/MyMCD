@@ -52,7 +52,7 @@ void error_msg(WINDOW *console_win, Parser *p, const char *error) {
     wrefresh(console_win);
 }
 
-bool parse_command(Parser *p, const char *content, WINDOW *console_win) {
+bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_win) {
     // Root function that calls other child functions
     if (!content) {
         const char *error = "Error Parsing Command (String doesn't exist)";
@@ -77,6 +77,7 @@ bool parse_command(Parser *p, const char *content, WINDOW *console_win) {
             advance_token(&p->current);
             if (parse_add(p, console_win, &c)) {
                 if (execute_addProperty(c)) {
+                    // Sucess
                     continue;
                 } else {
                     const char *error = "Failed to execute command for some reason";
