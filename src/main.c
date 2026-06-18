@@ -7,47 +7,74 @@
 #include <ncurses.h>
 #include <string.h>
 
-// Profiling only
+// Test diagram
+static void setup_large_e_commerce_delivery_mcd(void);
 
-static void setup_large_e_commerce_delivery_mcd(void) {
-    Entity *customer = createEntity("Customer", 5, 5);
-    addProperty(customer, "customer_id", "int");
-    addProperty(customer, "first_name", "str");
+// Debug AST:
 
-    Entity *shopping_cart = createEntity("Cart", 50, 5);
-    addProperty(shopping_cart, "cart_id", "int");
+WINDOW *create_ast_debug_window() {
+    int screen_height, screen_width;
+    getmaxyx(stdscr, screen_height, screen_width);
 
-    Entity *order = createEntity("Order", 95, 5);
-    addProperty(order, "order_id", "int");
+    // Give it a reasonable height, e.g., 1/3rd of the screen, or max 50
+    int debug_height = (screen_height / 3 < 30) ? (screen_height / 3) : 30;
+    int start_y = 2; // Start near the top instead of 50
+    int start_x = 2;
 
-    Entity *product = createEntity("Product", 140, 5);
-    addProperty(product, "product_id", "int");
+    WINDOW *debug_window = newwin(debug_height, screen_width / 2, start_y, start_x);
 
-    Entity *delivery = createEntity("Delivery", 5, 27);
-    addProperty(delivery, "track_num", "str");
+    if (debug_window != NULL) {
+        box(debug_window, 0, 0);
+        mvwprintw(debug_window, 0, 2, " Console ");
+    } else {
+        // Handle the error gracefully, maybe log it
+    }
 
-    Entity *warehouse = createEntity("Warehouse", 95, 27);
-    addProperty(warehouse, "capacity", "int");
+    return debug_window;
+}
+void draw_ast_debug_window(WINDOW *debug_window, AST *tree) {
+    if (!debug_window || !tree)
+        return;
 
-    Relationship *r_owns = addRelationship(31, 5, customer, shopping_cart, "Owns");
-    addCardinalityAPI("1,1,0,1", r_owns);
+    int win_height = getmaxy(debug_window);
+    werase(debug_window);
+    box(debug_window, 0, 0);
 
-    Relationship *r_checkout = addRelationship(76, 5, shopping_cart, order, "Checkout");
-    addCardinalityAPI("0,1,1,1", r_checkout);
+    // Draw header inside local window space
+    wattron(debug_window, COLOR_PAIR(7) | A_BOLD);
+    mvwprintw(debug_window, 1, 1, "DEBUGGING AST:");
+    wattroff(debug_window, COLOR_PAIR(7) | A_BOLD);
 
-    Relationship *r_order_line = addRelationship(121, 5, order, product, "Ord_Line");
-    addCardinalityAPI("1,n,0,n", r_order_line);
+    ASTNode *temp = tree->head;
+    int local_y = 2; // Start printing content on line 2 (below the header)
 
-    Relationship *r_fulfilled = addRelationship(25, 16, order, delivery, "ShipsVia");
-    addCardinalityAPI("0,1,1,1", r_fulfilled);
+    // Stay within window boundaries (leave room for bottom border)
+    while (temp && local_y < win_height - 1) {
+        wmove(debug_window, local_y, 1);
+        wclrtoeol(debug_window);
 
-    Relationship *r_stocks = addRelationship(121, 16, warehouse, product, "Stocks");
-    addCardinalityAPI("1,n,0,n", r_stocks);
+        if (temp->cmd->type == ADD) {
+            mvwprintw(debug_window, local_y, 2, "ADD: %s . %s (%s)", temp->cmd->cmds.add_command.identifier_name,
+                      temp->cmd->cmds.add_command.prop_name, temp->cmd->cmds.add_command.prop_type);
+        } else if (temp->cmd->type == CREATE) {
+            if (temp->cmd->cmds.create_command.type == TYPE_ENTITY) {
+                mvwprintw(debug_window, local_y, 2, "CR_ENT: %s", temp->cmd->cmds.create_command.Data.e.name);
+            } else if (temp->cmd->cmds.create_command.type == TYPE_RELATIONSHIP) {
+                mvwprintw(debug_window, local_y, 2, "CR_REL: %s", temp->cmd->cmds.create_command.Data.r.name);
+            }
+        }
+
+        local_y++;         // Move to the next line in the window
+        temp = temp->next; // CRITICAL: Advance to next AST node
+    }
+
+    wnoutrefresh(debug_window);
+    // Remove doupdate() from here if your main loop handles flushing all windows together
+    doupdate();
 }
 
 int main() {
     initscr();
-    // =>>
 
     initColors();
 
@@ -68,6 +95,7 @@ int main() {
     // test diagram
 
     // == WINDOWS ==
+    WINDOW *debug_window = create_ast_debug_window();
     WINDOW *console_win = create_console_window();
     WINDOW *help_win = create_help_window();
     char input_buffer[256] = "";
@@ -110,10 +138,11 @@ int main() {
     draw_console_prompt(console_win, input_buffer, status);
     Arena a;
     arena_init(&a, 1024 * 1024);
+    AST tree;
+    init_AST(&tree);
 
     while (is_running) {
-        AST tree;
-        init_AST(&tree);
+
         if (needs_redraw) {
             draw_all_and_refresh(screen_width, &moving, &needs_redraw);
         }
@@ -136,6 +165,9 @@ int main() {
                     curs_set(0); // UPDATE => hide cursor while help is open, cursor warping is the flicker
                 } else if (strlen(input_buffer) == 0) {
                     // mvwprintw(stdscr, screen_height / 2, screen_width / 2, "UPDATED");
+                    // LOG Error :empty command
+                } else if (strcmp(input_buffer, "debug") == 0) {
+                    draw_ast_debug_window(debug_window, &tree);
                 } else {
                     da_execute(&tree, &a, console_win, input_buffer, &needs_redraw);
                 }
@@ -411,6 +443,43 @@ int main() {
     // UPDATE => clean up the dedicated help window
     delwin(help_win);
     delwin(scrolling_pad);
+    destroy_arena(&a);
     endwin();
     return 0;
+}
+
+static void setup_large_e_commerce_delivery_mcd(void) {
+    Entity *customer = createEntity("Customer", 5, 5);
+    addProperty(customer, "customer_id", "int");
+    addProperty(customer, "first_name", "str");
+
+    Entity *shopping_cart = createEntity("Cart", 50, 5);
+    addProperty(shopping_cart, "cart_id", "int");
+
+    Entity *order = createEntity("Order", 95, 5);
+    addProperty(order, "order_id", "int");
+
+    Entity *product = createEntity("Product", 140, 5);
+    addProperty(product, "product_id", "int");
+
+    Entity *delivery = createEntity("Delivery", 5, 27);
+    addProperty(delivery, "track_num", "str");
+
+    Entity *warehouse = createEntity("Warehouse", 95, 27);
+    addProperty(warehouse, "capacity", "int");
+
+    Relationship *r_owns = addRelationship(31, 5, customer, shopping_cart, "Owns");
+    addCardinalityAPI("1,1,0,1", r_owns);
+
+    Relationship *r_checkout = addRelationship(76, 5, shopping_cart, order, "Checkout");
+    addCardinalityAPI("0,1,1,1", r_checkout);
+
+    Relationship *r_order_line = addRelationship(121, 5, order, product, "Ord_Line");
+    addCardinalityAPI("1,n,0,n", r_order_line);
+
+    Relationship *r_fulfilled = addRelationship(25, 16, order, delivery, "ShipsVia");
+    addCardinalityAPI("0,1,1,1", r_fulfilled);
+
+    Relationship *r_stocks = addRelationship(121, 16, warehouse, product, "Stocks");
+    addCardinalityAPI("1,n,0,n", r_stocks);
 }

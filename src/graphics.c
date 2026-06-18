@@ -501,7 +501,7 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
         whline(win, ACS_HLINE, w - 2); // w-2 so it doesn't break the vertical borders
         mvwprintw(win, h - 2, 1, "/%s", search_buffer);
 
-        // shringing the pad's rendering area so it doesn't overwrite the search bar
+        // shrinking the pad's rendering area so it doesn't overwrite the search bar
         smaxrow = help_win_y + h - 4;
     }
 

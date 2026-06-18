@@ -25,22 +25,16 @@ bool da_execute(AST *t, Arena *a, WINDOW *console_win, const char *input, bool *
     }
 
     TempArena temp_arena = init_temp_arena(a);
-    Parser *p = ARENA_PUSH_OBJECT(a, Parser);
-    assert(p != NULL);
-    init_parser(p, input);
-    tokenize_content(input, p->tokens, &p->count);
+    Parser p; // Keep the parser on the stack
+    init_parser(&p, input);
+    tokenize_content(input, p.tokens, &p.count);
 
-    /* Why is parse_command returning AST* ptr:
-     * To avoid loosing AST changes when
-     * freeing temp arena we return a pointer
-     * to it so that after freeing temp_arena
-     * we can commit the changes and push to the
-     * real arena
-     */
+    if (parse_command(t, &p, input, console_win, a)) {
 
-    parse_command(t, p, input, console_win);
-    *needs_redraw = true;
-    free_temp_arena(temp_arena);
-
-    return true;
+        *needs_redraw = true;
+        return true;
+    } else {
+        free_temp_arena(temp_arena);
+        return false;
+    }
 }

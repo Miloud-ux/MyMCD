@@ -52,7 +52,7 @@ void error_msg(WINDOW *console_win, Parser *p, const char *error) {
     wrefresh(console_win);
 }
 
-bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_win) {
+bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_win, Arena *a) {
     // Root function that calls other child functions
     if (!content) {
         const char *error = "Error Parsing Command (String doesn't exist)";
@@ -71,6 +71,11 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
             advance_token(&p->current);
             if (parse_create(p, console_win, &c)) {
                 execute_create(c);
+                // Add it to ast
+                Command *cmd = ARENA_PUSH_OBJECT(a, Command);
+                cmd->type = CREATE;
+                cmd->cmds.create_command = c;
+                add_ast_node(a, tree, cmd);
             }
         } else if (t.type == TOKEN_ADD) {
             AddCommand c = {0};
@@ -78,7 +83,10 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
             if (parse_add(p, console_win, &c)) {
                 if (execute_addProperty(c)) {
                     // Sucess
-                    continue;
+                    Command *cmd = ARENA_PUSH_OBJECT(a, Command);
+                    cmd->type = ADD;
+                    cmd->cmds.add_command = c;
+                    add_ast_node(a, tree, cmd);
                 } else {
                     const char *error = "Failed to execute command for some reason";
                     error_msg(console_win, p, error);

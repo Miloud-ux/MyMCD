@@ -37,12 +37,14 @@ typedef struct {
 } AddCommand;
 
 typedef enum { ADD, CREATE } CommandType;
+typedef union {
+        AddCommand add_command;
+        CreateCommand create_command;
+} CommandsContainer;
+
 typedef struct {
         CommandType type;
-        union {
-                AddCommand add_command;
-                CreateCommand create_command;
-        } CommandsContainer;
+        CommandsContainer cmds;
 } Command;
 
 // AST Structure

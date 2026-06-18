@@ -1,6 +1,5 @@
-#ifndef SRC_PARSE_H
-#define SRC_PARSE_H
-#include "../DSA/AST.h"
+#pragma once
+#include "../DSA/AST.h" // includes arena.h
 #include "tokenize.h"
 #include <ncurses.h>
 
@@ -12,7 +11,7 @@ typedef struct {
 } Parser;
 
 void init_parser(Parser *p, const char *content);
-bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_win);
+bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_win, Arena *a);
 // maybe in future implementation of error msg function we can add a simple
 // guess 'did you mean this "TOKEN"' then we have to pass the current token
 void error_msg(WINDOW *console_win, Parser *p, const char *error);
@@ -33,5 +32,3 @@ bool execute_addProperty(AddCommand c);
 
 // clear command
 void parse_clear(Parser *p, WINDOW *console);
-
-#endif // !SRC_PARSE_H
