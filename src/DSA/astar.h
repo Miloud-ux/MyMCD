@@ -1,7 +1,6 @@
 #ifndef DSA_ASTAR_H_
 #define DSA_ASTAR_H_
 #include <stdbool.h>
-#include <stdlib.h>
 
 typedef struct AStarNode {
         int x, y;   // pos
@@ -27,11 +26,9 @@ typedef struct {
         int length;
 } AStarPath;
 
-AStarGrid *astar_create_grid(int start_x, int start_y, int end_x, int end_y,
-                             int margin);
+AStarGrid *astar_create_grid(int start_x, int start_y, int end_x, int end_y, int margin);
 void astar_mark_obstacle(AStarGrid *grid, int x, int y, int width, int height);
-AStarPath *astar_find_path(AStarGrid *grid, int start_x, int start_y, int end_x,
-                           int end_y);
+AStarPath *astar_find_path(AStarGrid *grid, int start_x, int start_y, int end_x, int end_y);
 void astar_free_grid(AStarGrid *grid);
 
 void astar_free_path(AStarPath *path);

@@ -54,6 +54,12 @@ typedef struct {
 } AddCommand;
 
 typedef enum { ADD, CREATE } CommandType;
+typedef enum { MLD, SQL } DiagramType;
+
+typedef struct {
+        DiagramType type;
+} ConvertCommand;
+
 typedef union {
         AddCommand add_command;
         CreateCommand create_command;

@@ -42,5 +42,13 @@ bool execute_addProperty(AddCommand c);
 bool parse_add_cardinality(Parser *p, WINDOW *console, AddCommand *c);
 bool parse_add_cardinality_value(Parser *p, WINDOW *console, AddCommand *c);
 bool execute_addCardinality(AddCommand c);
+
+// Convert to MLD command
+bool parse_convert(Parser *p, WINDOW *win, ConvertCommand *c);
+bool convert_to_mld(void);
+
 // clear command
 void parse_clear();
+
+// display commands
+void show_msg(WINDOW *console_win, const char *msg, const char *severity);

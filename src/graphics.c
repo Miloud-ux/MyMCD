@@ -65,35 +65,51 @@ void draw_vline_at(int x, int y1, int y2, chtype ch) {
 }
 
 void drawEntity(Entity *e) {
-    // TODO : Reimplement this using vline and hline
 
+    if (!e) {
+        return;
+    }
+
+    int max_scr_x;
+    int max_scr_y;
+    getmaxyx(stdscr, max_scr_y, max_scr_x);
+
+    if (e->x < 0) {
+        e->x = 0;
+
+    } else if (e->x + e->width > max_scr_x) {
+        int dist = (e->x + e->width) - max_scr_x;
+        e->x -= dist;
+    } else if (e->y < 0) {
+        e->y = 0;
+    } else if (e->y + e->height + CONSOLE_HEIGHT > max_scr_y) {
+        int dist = (e->y + e->height + CONSOLE_HEIGHT) - max_scr_y;
+        e->y -= dist;
+    }
+
+    // == Old implementation kept for more research ===
+    // for (int i = 1; i < e->height - 1; i++) {
+    //     mvprintw(e->y + i, e->x + 1, "%-*s", e->width - 2, "");
+    //     // why is this -2 ?  at least -1 ? does this affect A* ?
+    //     mvaddch(e->y + i, e->x + e->width - 1, ACS_VLINE);
+    // }
+
+    draw_hline_at(e->y, e->x + 1, e->x + e->width - 1, ACS_HLINE);                 // top border
+    draw_vline_at(e->x, e->y + 1, e->y + e->height - 1, ACS_VLINE);                // left border
+    draw_vline_at(e->x + e->width - 1, e->y + 1, e->y + e->height - 1, ACS_VLINE); // right border
+    draw_hline_at(e->y + 2, e->x + 1, e->x + e->width - 2, ACS_HLINE);             // Entity name seperator
+    draw_hline_at(e->y + e->height - 1, e->x + 1, e->x + e->width - 2, ACS_HLINE); // bottom border
+
+    // Corners
     mvaddch(e->y, e->x, ACS_ULCORNER);
-    for (int i = 1; i < e->width - 1; i++) {
-        mvaddch(e->y, e->x + i, ACS_HLINE);
-    }
     mvaddch(e->y, e->x + e->width - 1, ACS_URCORNER);
-
-    for (int i = 1; i < e->height - 1; i++) {
-        mvaddch(e->y + i, e->x, ACS_VLINE);
-        mvprintw(e->y + i, e->x + 1, "%-*s", e->width - 2, "");
-        // why is this -2 ?  at least -1 ? does this affect A* ?
-        mvaddch(e->y + i, e->x + e->width - 1, ACS_VLINE);
-    }
-
     mvaddch(e->y + e->height - 1, e->x, ACS_LLCORNER);
-    for (int i = 1; i < e->width - 1; i++) {
-        mvaddch(e->y + e->height - 1, e->x + i, ACS_HLINE);
-    }
     mvaddch(e->y + e->height - 1, e->x + e->width - 1, ACS_LRCORNER);
+
+    // Entity Name
     attron(A_BOLD);
     mvprintw(e->y + 1, e->x + (e->width - strlen(e->name)) / 2, "%s", e->name);
     attroff(A_BOLD);
-
-    // int stdscry = getmaxy(stdscr);
-
-    // if (e->x >= 0 && e->x + e->width < stdscry) {
-    draw_hline_at(e->y + 2, e->x + 1, e->x + e->width - 2, ACS_HLINE);
-    //}
 
     for (int i = 0; i < e->num_properties; i++) {
         if (e->properties[i]) {
@@ -114,6 +130,26 @@ void drawEntity(Entity *e) {
 }
 
 void drawRelationship(Relationship *r) {
+    if (!r) {
+        return;
+    }
+
+    int max_scr_x;
+    int max_scr_y;
+    getmaxyx(stdscr, max_scr_y, max_scr_x);
+
+    if (r->x < 0) {
+        r->x = 0;
+
+    } else if (r->x + r->width > max_scr_x) {
+        int dist = (r->x + r->width) - max_scr_x;
+        r->x -= dist;
+    } else if (r->y < 0) {
+        r->y = 0;
+    } else if (r->y + r->height + CONSOLE_HEIGHT > max_scr_y) {
+        int dist = (r->y + r->height + CONSOLE_HEIGHT) - max_scr_y;
+        r->y -= dist;
+    }
 
     mvaddch(r->y, r->x, ACS_ULCORNER);
     for (int i = 1; i < r->width - 1; i++) {
@@ -894,4 +930,16 @@ void highlight_search_matches(HelpWindow *hwin, WINDOW *win, SearchResult *match
     }
     wnoutrefresh(win);
     doupdate();
+}
+
+void clear_console_log(WINDOW *console_win) {
+
+    wmove(console_win, 1, 1);
+    wclrtoeol(console_win);
+
+    wmove(console_win, 2, 1);
+    wclrtoeol(console_win);
+
+    wmove(console_win, 3, 1);
+    wclrtoeol(console_win);
 }

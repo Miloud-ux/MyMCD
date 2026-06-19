@@ -90,4 +90,7 @@ static inline int get_max_visible_row(int start_row, int page_type) {
 // Render Search results
 void highlight_search_matches(HelpWindow *hwin, WINDOW *win, SearchResult *matches, const char *search_buffer);
 
+// Utility functions
+void clear_console_log(WINDOW *console_win);
+
 #endif

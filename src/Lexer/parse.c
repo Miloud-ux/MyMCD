@@ -52,6 +52,43 @@ void error_msg(WINDOW *console_win, Parser *p, const char *error) {
     wrefresh(console_win);
 }
 
+void show_msg(WINDOW *console_win, const char *msg, const char *severity) {
+    // if (idx >= p->count)
+    //     idx = p->count - 1;
+    // if (idx < 0)
+    //     idx = 0;
+
+    wmove(console_win, 1, 1);
+    wclrtoeol(console_win);
+
+    wmove(console_win, 2, 1);
+    wclrtoeol(console_win);
+
+    wmove(console_win, 3, 1);
+    wclrtoeol(console_win);
+
+    size_t len = strlen(severity);
+
+    if (strlen(severity) == 0) {
+        wattron(console_win, COLOR_PAIR(5));
+        mvwprintw(console_win, 1, 1, "[GENERIC UPDATE]: ");
+        wattroff(console_win, COLOR_PAIR(5));
+        mvwprintw(console_win, 1, 5 + len, "%s !", msg);
+    } else if (strcmp(severity, "WARNING") == 0) {
+        wattron(console_win, COLOR_PAIR(3));
+        mvwprintw(console_win, 1, 1, "[WARNING]: ");
+        wattroff(console_win, COLOR_PAIR(3));
+        mvwprintw(console_win, 1, 5 + len, "%s !", msg);
+    } else if (strcmp(severity, "UPDATE") == 0) {
+        wattron(console_win, COLOR_PAIR(5));
+        mvwprintw(console_win, 1, 1, "[UPDATE]: ");
+        wattroff(console_win, COLOR_PAIR(5));
+        mvwprintw(console_win, 1, 5 + len, "%s !", msg);
+    }
+
+    wrefresh(console_win);
+}
+
 // Update => New function: error_msg_ex(). Same 3-line console layout/style as
 // error_msg() above (still "> <input>" + "^~~~" pointing at a token), but used
 // for commands that parsed fine and only failed once we tried to *run* them
@@ -180,6 +217,19 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
             }
         } else if (t.type == TOKEN_HELP) {
             // Handled in main
+        } else if (t.type == TOKEN_CONVERT) {
+            ConvertCommand c = {0};
+            advance_token(&p->current);
+            if (parse_convert(p, console_win, &c)) {
+                if (c.type == MLD) {
+                    if (convert_to_mld()) {
+                        show_msg(console_win, "Converted to MLD succesfully", "UPDATE");
+                    }
+                } else if (c.type == SQL) {
+                    // convert_to_sql();
+                }
+            }
+
         } else if (t.type == TOKEN_CLEAR) {
             advance_token(&p->current);
             parse_clear();
@@ -518,3 +568,27 @@ bool execute_addCardinality(AddCommand c) {
 
     return false;
 }
+
+bool parse_convert(Parser *p, WINDOW *win, ConvertCommand *c) {
+    Token t = peek_token(p->tokens, p->current);
+
+    if (t.type == TOKEN_MLD) {
+    }
+
+    switch (t.type) {
+    case TOKEN_MLD:
+        c->type = MLD;
+        advance_token(&p->current);
+        return true;
+    case TOKEN_SQL:
+        c->type = SQL;
+        advance_token(&p->current);
+        return true;
+    default:
+        const char *error = "Expected a valid conversion mode (MLD, SQL)";
+        error_msg(win, p, error);
+        return false;
+    }
+}
+
+bool convert_to_mld(void) { return true; }

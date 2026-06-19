@@ -159,7 +159,7 @@ int main() {
             if (ch == '\n') {
                 if (strcmp(input_buffer, "exit") == 0 || strcmp(input_buffer, "quit") == 0) {
                     is_running = false;
-                } else if (strcmp(input_buffer, "/help") == 0) {
+                } else if (strcmp(input_buffer, "help") == 0) {
                     status = Help;
                     last_status = Help;
                     curs_set(0); // UPDATE => hide cursor while help is open, cursor warping is the flicker
@@ -182,6 +182,9 @@ int main() {
                     input_buffer[input_len++] = ch;
                     input_buffer[input_len] = '\0';
                 }
+                curs_set(0);
+                clear_console_log(console_win);
+                curs_set(1);
                 // Editing mode
             } else if (ch == '\t') {
                 status = Editing;
