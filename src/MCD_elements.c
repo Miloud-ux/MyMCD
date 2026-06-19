@@ -146,16 +146,17 @@ void addCardinality(const char *input, Cardinality *c1, Cardinality *c2) {
     c2->value[CARDINALITY_LEN - 1] = '\0';
 }
 
-void addCardinalityAPI(const char *input, Relationship *r) {
+bool addCardinalityAPI(const char *input, Relationship *r) {
     Cardinality *c = malloc(sizeof(Cardinality) * 2);
     if (!c) {
-        exit(1);
+        return false;
     }
     addCardinality(input, &c[0], &c[1]);
     c[0].value[CARDINALITY_LEN - 1] = '\0';
     c[1].value[CARDINALITY_LEN - 1] = '\0';
     r->cards[0] = &c[0];
     r->cards[1] = &c[1];
+    return true;
 }
 
 Relationship *addRelationship(int x, int y, Entity *e1, Entity *e2, const char *name) {

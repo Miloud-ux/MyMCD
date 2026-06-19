@@ -85,14 +85,30 @@ void drawEntity(Entity *e) {
         mvaddch(e->y + e->height - 1, e->x + i, ACS_HLINE);
     }
     mvaddch(e->y + e->height - 1, e->x + e->width - 1, ACS_LRCORNER);
+    attron(A_BOLD);
     mvprintw(e->y + 1, e->x + (e->width - strlen(e->name)) / 2, "%s", e->name);
+    attroff(A_BOLD);
+
+    // int stdscry = getmaxy(stdscr);
+
+    // if (e->x >= 0 && e->x + e->width < stdscry) {
     draw_hline_at(e->y + 2, e->x + 1, e->x + e->width - 2, ACS_HLINE);
+    //}
 
     for (int i = 0; i < e->num_properties; i++) {
         if (e->properties[i]) {
-            char prop_str[64];
-            snprintf(prop_str, sizeof(prop_str), "%s:%s", e->properties[i]->name, e->properties[i]->type);
-            mvprintw(e->y + 3 + i, e->x + 1, "%-*s", e->width - 2, prop_str);
+            // Update => name bold + type dim instead of one flat snprintf("%s:%s").
+            // Total printed text is identical ("name:type", same length as
+            // before) so addProperty()'s width-growth math in MCD_elements.c is
+            // unaffected — only the attributes differ.
+            int row = e->y + 3 + i;
+            mvprintw(row, e->x + 1, "%-*s", e->width - 2, ""); // clear the row first
+            attron(A_BOLD);
+            mvprintw(row, e->x + 1, "%s", e->properties[i]->name);
+            attroff(A_BOLD);
+            attron(A_DIM);
+            mvprintw(row, e->x + 1 + (int)strlen(e->properties[i]->name), ":%s", e->properties[i]->type);
+            attroff(A_DIM);
         }
     }
 }
@@ -117,15 +133,42 @@ void drawRelationship(Relationship *r) {
     }
     mvaddch(r->y + r->height - 1, r->x + r->width - 1, ACS_LRCORNER);
 
+    attron(A_BOLD);
     mvprintw(r->y + 1, r->x + (r->width - strlen(r->name)) / 2, "%s", r->name);
+    attroff(A_BOLD);
     draw_hline_at(r->y + 2, r->x + 1, r->x + r->width - 2, ACS_HLINE);
 
     for (int i = 0; i < r->num_properties; i++) {
         if (r->properties[i]) {
-            char prop_str[64];
-            snprintf(prop_str, sizeof(prop_str), "%s:%s", r->properties[i]->name, r->properties[i]->type);
-            mvprintw(r->y + 3 + i, r->x + 1, "%-*s", r->width - 2, prop_str);
+            int row = r->y + 3 + i;
+            mvprintw(row, r->x + 1, "%-*s", r->width - 2, ""); // clear the row first
+            attron(A_BOLD);
+            mvprintw(row, r->x + 1, "%s", r->properties[i]->name);
+            attroff(A_BOLD);
+            attron(A_DIM);
+            mvprintw(row, r->x + 1 + (int)strlen(r->properties[i]->name), ":%s", r->properties[i]->type);
+            attroff(A_DIM);
         }
+    }
+
+    // Update => small diamond accents just outside the corners. MCD notation
+    // conventionally draws relationships as diamonds/ovals instead of rectangles
+    // for entities, drawing like a  diamond/oval with ncurses and checking collisions
+    // good luck doing that.
+
+    int max_y, max_x;
+    getmaxyx(stdscr, max_y, max_x);
+    if (r->y >= 0 && r->x >= 0) {
+        mvaddch(r->y, r->x, ACS_DIAMOND);
+    }
+    if (r->y >= 0 && r->x + r->width - 1 < max_x) {
+        mvaddch(r->y, r->x + r->width - 1, ACS_DIAMOND);
+    }
+    if (r->y + r->height - 1 < max_y && r->x >= 0) {
+        mvaddch(r->y + r->height - 1, r->x, ACS_DIAMOND);
+    }
+    if (r->y + r->height - 1 < max_y && r->x + r->width - 1 < max_x) {
+        mvaddch(r->y + r->height - 1, r->x + r->width - 1, ACS_DIAMOND);
     }
 }
 void add_endpoints_to_path(AStarPath *path, int start_x, int start_y, int end_x, int end_y) {
@@ -198,6 +241,7 @@ void draw_path_with_corners(AStarPath *path) {
         bool has_right = (prev_x > curr_x) || (next_x > curr_x);
 
         // select character based on Neighbors
+        attron(A_BOLD);
         if (has_down && has_right) {
             mvaddch(curr_y, curr_x, ACS_ULCORNER); // ┌
         } else if (has_down && has_left) {
@@ -207,9 +251,80 @@ void draw_path_with_corners(AStarPath *path) {
         } else if (has_up && has_left) {
             mvaddch(curr_y, curr_x, ACS_LRCORNER); // ┘
         }
+        attroff(A_BOLD);
     }
 
     attroff(COLOR_PAIR(3));
+}
+
+// Cardinality/line-overlap fix.
+//  These two helpers spread multiple relationships evenly along the
+// side they share, so each one gets its own point, right next to its own line,
+// close to the entity. findBestAttachPoint() itself and MCD_elements.c are
+// untouched, since other code may depend on its current behavior.
+static void get_attach_slot(Entity *e, Side side, Relationship *r, int *slot_index, int *slot_total) {
+    int idx = 0;
+    int total = 0;
+
+    for (int i = 0; i < global_objects.relationship_count; i++) {
+        Relationship *other = global_objects.relationships[i];
+        if (!other) {
+            continue;
+        }
+        if (other->e1 != e && other->e2 != e) {
+            continue; // doesn't touch this entity at all
+        }
+
+        AttachPoint other_ap = findBestAttachPoint(e->x, e->y, e->width, e->height, other->x, other->y);
+        if (other_ap.side != side) {
+            continue; // touches this entity, but on a different side
+        }
+
+        if (other == r) {
+            idx = total;
+        }
+        total++;
+    }
+
+    *slot_index = idx;
+    *slot_total = (total > 0) ? total : 1;
+}
+
+static AttachPoint slotted_attach_point(Entity *e, Side side, int slot_index, int slot_total) {
+    AttachPoint p;
+    p.side = side;
+
+    if (side == SIDE_TOP || side == SIDE_BOTTOM) {
+        int usable = e->width - 2; // stay inside the corner characters
+        if (usable < 1) {
+            usable = 1;
+        }
+        int step = usable / (slot_total + 1);
+        if (step < 1) {
+            step = 1;
+        }
+        p.x = e->x + 1 + step * (slot_index + 1);
+        if (p.x > e->x + e->width - 2) {
+            p.x = e->x + e->width - 2;
+        }
+        p.y = (side == SIDE_TOP) ? e->y : e->y + e->height - 1;
+    } else {
+        int usable = e->height - 2;
+        if (usable < 1) {
+            usable = 1;
+        }
+        int step = usable / (slot_total + 1);
+        if (step < 1) {
+            step = 1;
+        }
+        p.y = e->y + 1 + step * (slot_index + 1);
+        if (p.y > e->y + e->height - 2) {
+            p.y = e->y + e->height - 2;
+        }
+        p.x = (side == SIDE_LEFT) ? e->x : e->x + e->width - 1;
+    }
+
+    return p;
 }
 
 void drawConnectionAStar(Relationship *r) {
@@ -220,6 +335,19 @@ void drawConnectionAStar(Relationship *r) {
     AttachPoint ap_rel_e1 = findBestAttachPoint(r->x, r->y, r->width, r->height, r->e1->x, r->e1->y);
     AttachPoint ap_rel_e2 = findBestAttachPoint(r->x, r->y, r->width, r->height, r->e2->x, r->e2->y);
     AttachPoint ap2 = findBestAttachPoint(r->e2->x, r->e2->y, r->e2->width, r->e2->height, r->x, r->y);
+
+    // Update => replace the shared center-of-side point with a per-relationship
+    // slot along that side (see get_attach_slot()/slotted_attach_point() above).
+    // This is what both the line endpoints (start1_x/start2_y/etc. below) and
+    // the cardinality printing further down now use, so neither collides
+    // anymore when an entity has more than one relationship on the same side.
+    int slot1, slot1_total;
+    get_attach_slot(r->e1, ap1.side, r, &slot1, &slot1_total);
+    ap1 = slotted_attach_point(r->e1, ap1.side, slot1, slot1_total);
+
+    int slot2, slot2_total;
+    get_attach_slot(r->e2, ap2.side, r, &slot2, &slot2_total);
+    ap2 = slotted_attach_point(r->e2, ap2.side, slot2, slot2_total);
 
     int start1_x = ap1.x;
     int start1_y = ap1.y;
@@ -336,10 +464,12 @@ void drawConnectionAStar(Relationship *r) {
 
     if (r->cards[0]) {
         switch (ap1.side) {
-        case SIDE_LEFT:
-            // TODO better cords
-            ap1.x -= 2;
+        case SIDE_LEFT: {
+
+            int len = (int)strlen(r->cards[0]->value);
+            ap1.x -= (len + 1);
             break;
+        }
         case SIDE_RIGHT:
             ap1.x += 1;
             break;
@@ -350,13 +480,17 @@ void drawConnectionAStar(Relationship *r) {
             ap1.y += 1;
             break;
         }
+        attron(A_BOLD);
         mvprintw(ap1.y, ap1.x, "%s", r->cards[0]->value);
+        attroff(A_BOLD);
     }
     if (r->cards[1]) {
         switch (ap2.side) {
-        case SIDE_LEFT:
-            ap2.x -= 1;
+        case SIDE_LEFT: {
+            int len = (int)strlen(r->cards[1]->value);
+            ap2.x -= (len + 1);
             break;
+        }
         case SIDE_RIGHT:
             ap2.x += 1;
             break;
@@ -367,7 +501,9 @@ void drawConnectionAStar(Relationship *r) {
             ap2.y += 1;
             break;
         }
+        attron(A_BOLD);
         mvprintw(ap2.y, ap2.x, "%s", r->cards[1]->value);
+        attroff(A_BOLD);
     }
 }
 
@@ -388,8 +524,6 @@ WINDOW *create_console_window() {
     return console_win;
 }
 
-// UPDATE => own persistent WINDOW for help so draw_help_window never
-//           touches console_win and werase() never blanks the wrong surface
 WINDOW *create_help_window() {
     int std_screen_width, std_screen_height;
     getmaxyx(stdscr, std_screen_height, std_screen_width);
@@ -404,9 +538,6 @@ WINDOW *create_help_window() {
     int y = (std_screen_height - h) / 2;
     int x = (std_screen_width - w) / 2;
     WINDOW *win = newwin(h, w, y, x);
-    // UPDATE => leaveok stops ncurses repositioning the physical cursor after
-    //           every draw call; cursor jumping between mvwprintw calls is what
-    //           causes the flicker on Wayland
     leaveok(win, TRUE);
     return win;
 }
@@ -474,10 +605,10 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
     int help_win_y = (std_screen_height - h) / 2;
     int help_win_x = (std_screen_width - w) / 2;
 
-    // UPDATE => wresize+mvwin removed from per-frame draw; create_help_window
-    //           already positions the window correctly. Calling mvwin every frame
-    //           forces a full terminal repaint on Wayland which is the flicker.
-    //           Re-add here only if you implement terminal resize handling (SIGWINCH).
+    // wresize+mvwin removed from per-frame draw; create_help_window
+    //  already positions the window correctly. Calling mvwin every frame
+    //  forces a full terminal repaint on Wayland which is the flicker.
+    //  Re-add here only if you implement terminal resize handling (SIGWINCH).
 
     werase(win);
     box(win, 0, 0);
@@ -561,7 +692,7 @@ void draw_all_relationships(GlobalObjects global_objects, int moving_index, bool
 }
 
 void draw_all_and_refresh(int screen_width, bool *moving, bool *needs_redraw) {
-    // UPDATE => frame timing: measures microseconds for the full draw+flush cycle
+    // Frame timing
     struct timespec t0, t1;
     clock_gettime(CLOCK_MONOTONIC, &t0);
 
@@ -570,7 +701,7 @@ void draw_all_and_refresh(int screen_width, bool *moving, bool *needs_redraw) {
     mvprintw(0, screen_width / 2 - 10, "MCD Tool - Type 'help' for commands");
     draw_all_entities(global_objects, 0, moving);
     draw_all_relationships(global_objects, 0, moving);
-    // queue stdscr — console_win's doupdate inside draw_console_prompt
+    // queue stdscr and then console_win's doupdate inside draw_console_prompt
     // will flush both together when called right after this in the main loop
     wnoutrefresh(stdscr);
 
@@ -586,7 +717,7 @@ WINDOW *init_pad(int num_lines, int num_col, HelpWindow hwin) {
     if (!pad)
         return NULL;
 
-    // Write all lines to the pad
+    // write all lines to the pad
 
     for (int p = 0; p < HelpPageNum; p++) {
         for (size_t l = 0; l < hwin.pages_db[p].line_count; l++) {
@@ -615,7 +746,7 @@ void revert_back_to_console(WINDOW *console_win, status *status, bool *needs_red
     wresize(console_win, CONSOLE_HEIGHT, screen_width);
     mvwin(console_win, console_y, 0);
     werase(console_win);
-    curs_set(1); // UPDATE => restore cursor when returning to console
+    curs_set(1); // restore cursor
 
     *needs_redraw = true;
 }
@@ -683,7 +814,6 @@ void search_help(WINDOW *win, HelpWindow *hwin, char search_buffer[], int search
                         searching = false;
                         break;
                     }
-                    // UPDATE => batch into doupdate, no mid-frame physical write
                     wnoutrefresh(win);
                     doupdate();
                 }
@@ -762,7 +892,6 @@ void highlight_search_matches(HelpWindow *hwin, WINDOW *win, SearchResult *match
             }
         }
     }
-    // UPDATE => batch into doupdate, no mid-frame physical write
     wnoutrefresh(win);
     doupdate();
 }

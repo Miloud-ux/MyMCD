@@ -15,6 +15,14 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
 // maybe in future implementation of error msg function we can add a simple
 // guess 'did you mean this "TOKEN"' then we have to pass the current token
 void error_msg(WINDOW *console_win, Parser *p, const char *error);
+
+// Update => ErrorKind + error_msg_ex(): lets a caller label a problem as either
+// a parsing/syntax issue (bad token) or a command that parsed fine but failed
+// when it actually ran (e.g. relationship not found). error_msg() above is
+// unchanged and still works exactly as before; this is purely additive.
+typedef enum { ERR_SYNTAX, ERR_RUNTIME } ErrorKind;
+void error_msg_ex(WINDOW *console_win, Parser *p, ErrorKind kind, const char *error, const char *hint);
+
 bool parse_create(Parser *p, WINDOW *console, CreateCommand *c);
 bool parse_create_entity(WINDOW *console, Parser *p, bool is_called, CreateCommand *c);
 bool parse_create_relationship(WINDOW *console, Parser *p, CreateCommand *c);
@@ -30,5 +38,9 @@ bool parse_add_property_type(Parser *p, WINDOW *console, AddCommand *c);
 Element *get_element_by_name(const char *name);
 bool execute_addProperty(AddCommand c);
 
+//  Add cardinality command
+bool parse_add_cardinality(Parser *p, WINDOW *console, AddCommand *c);
+bool parse_add_cardinality_value(Parser *p, WINDOW *console, AddCommand *c);
+bool execute_addCardinality(AddCommand c);
 // clear command
-void parse_clear(Parser *p, WINDOW *console);
+void parse_clear();

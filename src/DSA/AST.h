@@ -3,6 +3,7 @@
 #include "../MCD_elements.h"
 #include "../utils/arena_allocator.h"
 
+/* == ASTNodes Data types == */
 typedef struct {
         char name[MAX_NAME_LEN];
 } EntityInfo;
@@ -13,12 +14,25 @@ typedef struct {
         char e2_name[MAX_NAME_LEN];
 } RelationshipInfo;
 
-typedef enum { TYPE_ENTITY, TYPE_RELATIONSHIP } ElementType; // TODO: move this func to MCD_elements
+typedef struct {
+        char prop_name[MAX_NAME_LEN];
+        char prop_type[MAX_TYPE_LEN];
+} PropertyInfo;
+
+typedef struct {
+        char value[RAW_CARDINALITY_LEN];
+        RelationshipInfo r;
+} CardinalityInfo;
+
+typedef enum { TYPE_ENTITY, TYPE_RELATIONSHIP, TYPE_PROPERTY, TYPE_CARDINALITY } ElementType;
+
 typedef struct {
         ElementType type;
         union {
                 Entity *e;
                 Relationship *r;
+                Property *p;
+                Cardinality *c;
         } Element;
 } Element;
 
@@ -32,8 +46,11 @@ typedef struct {
 
 typedef struct {
         char identifier_name[MAX_NAME_LEN];
-        char prop_name[MAX_NAME_LEN];
-        char prop_type[MAX_TYPE_LEN];
+        ElementType type;
+        union {
+                CardinalityInfo c;
+                PropertyInfo p;
+        } Data;
 } AddCommand;
 
 typedef enum { ADD, CREATE } CommandType;

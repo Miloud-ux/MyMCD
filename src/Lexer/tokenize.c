@@ -65,6 +65,8 @@ void tokenize_content(const char *content, Token tokens[], int *count) {
                 tokens[*count].type = TOKEN_ADD;
             } else if (strcmp(tokens[*count].value, "property") == 0) {
                 tokens[*count].type = TOKEN_PROPERTY;
+            } else if (strcmp(tokens[*count].value, "card") == 0) {
+                tokens[*count].type = TOKEN_CARDINALITY;
             } else if (strcmp(tokens[*count].value, "clear") == 0) {
                 tokens[*count].type = TOKEN_CLEAR;
             } else if (strcmp(tokens[*count].value, "money") == 0) {

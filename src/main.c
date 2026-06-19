@@ -55,7 +55,7 @@ void draw_ast_debug_window(WINDOW *debug_window, AST *tree) {
 
         if (temp->cmd->type == ADD) {
             mvwprintw(debug_window, local_y, 2, "ADD: %s . %s (%s)", temp->cmd->cmds.add_command.identifier_name,
-                      temp->cmd->cmds.add_command.prop_name, temp->cmd->cmds.add_command.prop_type);
+                      temp->cmd->cmds.add_command.Data.p.prop_name, temp->cmd->cmds.add_command.Data.p.prop_type);
         } else if (temp->cmd->type == CREATE) {
             if (temp->cmd->cmds.create_command.type == TYPE_ENTITY) {
                 mvwprintw(debug_window, local_y, 2, "CR_ENT: %s", temp->cmd->cmds.create_command.Data.e.name);
@@ -159,7 +159,7 @@ int main() {
             if (ch == '\n') {
                 if (strcmp(input_buffer, "exit") == 0 || strcmp(input_buffer, "quit") == 0) {
                     is_running = false;
-                } else if (strcmp(input_buffer, "help") == 0) {
+                } else if (strcmp(input_buffer, "/help") == 0) {
                     status = Help;
                     last_status = Help;
                     curs_set(0); // UPDATE => hide cursor while help is open, cursor warping is the flicker
