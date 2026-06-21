@@ -1,5 +1,6 @@
 #ifndef GRAPHICS_H
 #define GRAPHICS_H
+#include "DSA/AST.h"
 #include "DSA/astar.h"
 #include "DSA/kmp.h"
 #include "MCD_elements.h"
@@ -92,5 +93,9 @@ void highlight_search_matches(HelpWindow *hwin, WINDOW *win, SearchResult *match
 
 // Utility functions
 void clear_console_log(WINDOW *console_win);
+
+// Debugging Functions
+WINDOW *create_ast_debug_window(void);
+void draw_ast_debug_window(WINDOW *debug_window, AST *tree);
 
 #endif

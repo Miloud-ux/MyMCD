@@ -16,10 +16,6 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
 // guess 'did you mean this "TOKEN"' then we have to pass the current token
 void error_msg(WINDOW *console_win, Parser *p, const char *error);
 
-// Update => ErrorKind + error_msg_ex(): lets a caller label a problem as either
-// a parsing/syntax issue (bad token) or a command that parsed fine but failed
-// when it actually ran (e.g. relationship not found). error_msg() above is
-// unchanged and still works exactly as before; this is purely additive.
 typedef enum { ERR_SYNTAX, ERR_RUNTIME } ErrorKind;
 void error_msg_ex(WINDOW *console_win, Parser *p, ErrorKind kind, const char *error, const char *hint);
 
@@ -36,7 +32,8 @@ bool parse_add_property(Parser *p, WINDOW *console, AddCommand *c);
 bool parse_add_property_name(Parser *p, WINDOW *console, AddCommand *c);
 bool parse_add_property_type(Parser *p, WINDOW *console, AddCommand *c);
 Element *get_element_by_name(const char *name);
-bool execute_addProperty(AddCommand c);
+bool parse_add_property_key(Parser *p, WINDOW *console, AddCommand *c);
+bool execute_addProperty(AddCommand c, WINDOW *console_win);
 
 //  Add cardinality command
 bool parse_add_cardinality(Parser *p, WINDOW *console, AddCommand *c);

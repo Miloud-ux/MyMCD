@@ -17,6 +17,7 @@ typedef struct {
 typedef struct {
         char prop_name[MAX_NAME_LEN];
         char prop_type[MAX_TYPE_LEN];
+        KeyType type;
 } PropertyInfo;
 
 typedef struct {
@@ -53,8 +54,8 @@ typedef struct {
         } Data;
 } AddCommand;
 
-typedef enum { ADD, CREATE } CommandType;
-typedef enum { MLD, SQL } DiagramType;
+typedef enum { ADD, CREATE, CONVERT } CommandType;
+typedef enum { MCD, MLD, SQL } DiagramType;
 
 typedef struct {
         DiagramType type;
@@ -63,6 +64,7 @@ typedef struct {
 typedef union {
         AddCommand add_command;
         CreateCommand create_command;
+        ConvertCommand convert_command;
 } CommandsContainer;
 
 typedef struct {

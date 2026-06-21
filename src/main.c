@@ -10,83 +10,17 @@
 // Test diagram
 static void setup_large_e_commerce_delivery_mcd(void);
 
-// Debug AST:
-
-WINDOW *create_ast_debug_window() {
-    int screen_height, screen_width;
-    getmaxyx(stdscr, screen_height, screen_width);
-
-    // Give it a reasonable height, e.g., 1/3rd of the screen, or max 50
-    int debug_height = (screen_height / 3 < 30) ? (screen_height / 3) : 30;
-    int start_y = 2; // Start near the top instead of 50
-    int start_x = 2;
-
-    WINDOW *debug_window = newwin(debug_height, screen_width / 2, start_y, start_x);
-
-    if (debug_window != NULL) {
-        box(debug_window, 0, 0);
-        mvwprintw(debug_window, 0, 2, " Console ");
-    } else {
-        // Handle the error gracefully, maybe log it
-    }
-
-    return debug_window;
-}
-void draw_ast_debug_window(WINDOW *debug_window, AST *tree) {
-    if (!debug_window || !tree)
-        return;
-
-    int win_height = getmaxy(debug_window);
-    werase(debug_window);
-    box(debug_window, 0, 0);
-
-    // Draw header inside local window space
-    wattron(debug_window, COLOR_PAIR(7) | A_BOLD);
-    mvwprintw(debug_window, 1, 1, "DEBUGGING AST:");
-    wattroff(debug_window, COLOR_PAIR(7) | A_BOLD);
-
-    ASTNode *temp = tree->head;
-    int local_y = 2; // Start printing content on line 2 (below the header)
-
-    // Stay within window boundaries (leave room for bottom border)
-    while (temp && local_y < win_height - 1) {
-        wmove(debug_window, local_y, 1);
-        wclrtoeol(debug_window);
-
-        if (temp->cmd->type == ADD) {
-            mvwprintw(debug_window, local_y, 2, "ADD: %s . %s (%s)", temp->cmd->cmds.add_command.identifier_name,
-                      temp->cmd->cmds.add_command.Data.p.prop_name, temp->cmd->cmds.add_command.Data.p.prop_type);
-        } else if (temp->cmd->type == CREATE) {
-            if (temp->cmd->cmds.create_command.type == TYPE_ENTITY) {
-                mvwprintw(debug_window, local_y, 2, "CR_ENT: %s", temp->cmd->cmds.create_command.Data.e.name);
-            } else if (temp->cmd->cmds.create_command.type == TYPE_RELATIONSHIP) {
-                mvwprintw(debug_window, local_y, 2, "CR_REL: %s", temp->cmd->cmds.create_command.Data.r.name);
-            }
-        }
-
-        local_y++;         // Move to the next line in the window
-        temp = temp->next; // CRITICAL: Advance to next AST node
-    }
-
-    wnoutrefresh(debug_window);
-    // Remove doupdate() from here if your main loop handles flushing all windows together
-    doupdate();
-}
-
 int main() {
     initscr();
 
     initColors();
-
     cbreak();
     noecho();
     keypad(stdscr, TRUE);
     set_escdelay(50);
 
     // TODO: move to graphics.h header
-    enum fps { SIXTY = 16, THIRTY = 30 }; // 60, 30 fps
-    enum fps update_interval = SIXTY;
-    timeout(update_interval);
+    timeout(16); // 60fps and 30 for 30fps
 
     int screen_height, screen_width;
     getmaxyx(stdscr, screen_height, screen_width);
@@ -109,8 +43,8 @@ int main() {
     getmaxyx(stdscr, std_screen_height, std_screen_width);
 
     // Help window info
-    int center_y = (std_screen_height - HELP_WIN_HEIGHT) / 2;
-    int center_x = (std_screen_width - HELP_WIN_WIDTH) / 2;
+    // int center_y = (std_screen_height - HELP_WIN_HEIGHT) / 2;
+    // int center_x = (std_screen_width - HELP_WIN_WIDTH) / 2;
     int curr_main_scrolling_line;
     int curr_examples_scrolling_line;
     int curr_hotkey_scrolling_line;
@@ -173,6 +107,11 @@ int main() {
                 }
                 input_len = 0;
                 input_buffer[0] = '\0';
+            } else if (ch == KEY_RESIZE) {
+                // TODO: impement a better resize handling
+                getmaxyx(stdscr, screen_height, screen_width);
+                needs_redraw = true;
+
             } else if (ch == KEY_BACKSPACE || ch == 127) {
                 if (input_len > 0) {
                     input_buffer[--input_len] = '\0';
@@ -453,23 +392,23 @@ int main() {
 
 static void setup_large_e_commerce_delivery_mcd(void) {
     Entity *customer = createEntity("Customer", 5, 5);
-    addProperty(customer, "customer_id", "int");
-    addProperty(customer, "first_name", "str");
+    addProperty(customer, "customer_id", "int", PRIMARY_KEY);
+    addProperty(customer, "first_name", "str", NORMAL_KEY);
 
     Entity *shopping_cart = createEntity("Cart", 50, 5);
-    addProperty(shopping_cart, "cart_id", "int");
+    addProperty(shopping_cart, "cart_id", "int", PRIMARY_KEY);
 
     Entity *order = createEntity("Order", 95, 5);
-    addProperty(order, "order_id", "int");
+    addProperty(order, "order_id", "int", PRIMARY_KEY);
 
     Entity *product = createEntity("Product", 140, 5);
-    addProperty(product, "product_id", "int");
+    addProperty(product, "product_id", "int", PRIMARY_KEY);
 
     Entity *delivery = createEntity("Delivery", 5, 27);
-    addProperty(delivery, "track_num", "str");
+    addProperty(delivery, "track_num", "str", PRIMARY_KEY);
 
     Entity *warehouse = createEntity("Warehouse", 95, 27);
-    addProperty(warehouse, "capacity", "int");
+    addProperty(warehouse, "capacity", "int", NORMAL_KEY);
 
     Relationship *r_owns = addRelationship(31, 5, customer, shopping_cart, "Owns");
     addCardinalityAPI("1,1,0,1", r_owns);

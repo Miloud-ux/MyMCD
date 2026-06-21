@@ -79,6 +79,10 @@ void tokenize_content(const char *content, Token tokens[], int *count) {
                 tokens[*count].type = TOKEN_MLD;
             } else if (strcmp(tokens[*count].value, "SQL") == 0) {
                 tokens[*count].type = TOKEN_SQL;
+            } else if (strcmp(tokens[*count].value, "pk") == 0) {
+                tokens[*count].type = TOKEN_KEY;
+            } else if (strcmp(tokens[*count].value, "fk") == 0) {
+                tokens[*count].type = TOKEN_KEY;
             } else if (strcmp(tokens[*count].value, "str") == 0) {
                 tokens[*count].type = TOKEN_STRING_TYPE;
             } else if (strcmp(tokens[*count].value, "double") == 0) {

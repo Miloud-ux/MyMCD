@@ -13,11 +13,12 @@ void init_parser(Parser *p, const char *content) {
 }
 
 void error_msg(WINDOW *console_win, Parser *p, const char *error) {
-    int idx = p->current;
-    // if (idx >= p->count)
-    //     idx = p->count - 1;
-    // if (idx < 0)
-    //     idx = 0;
+    int idx = p->current; // TODO: maybe -1 to track previous token but this might lead to out of bound error
+    if (idx < 0)          // TODO: needs further investigation
+        idx = 0;
+    else {
+        idx--;
+    }
 
     wmove(console_win, 1, 1);
     wclrtoeol(console_win);
@@ -52,6 +53,7 @@ void error_msg(WINDOW *console_win, Parser *p, const char *error) {
     wrefresh(console_win);
 }
 
+// Can be used to signal errors without the need to pass in the parser
 void show_msg(WINDOW *console_win, const char *msg, const char *severity) {
     // if (idx >= p->count)
     //     idx = p->count - 1;
@@ -84,18 +86,16 @@ void show_msg(WINDOW *console_win, const char *msg, const char *severity) {
         mvwprintw(console_win, 1, 1, "[UPDATE]: ");
         wattroff(console_win, COLOR_PAIR(5));
         mvwprintw(console_win, 1, 5 + len, "%s !", msg);
+    } else if (strcmp(severity, "[LOGICAL ERROR]") == 0) {
+        wattron(console_win, COLOR_PAIR(1));
+        mvwprintw(console_win, 1, 1, "[LOGICAL ERROR]: ");
+        wattroff(console_win, COLOR_PAIR(1));
+        mvwprintw(console_win, 1, len + 5, "%s", msg);
     }
 
     wrefresh(console_win);
 }
 
-// Update => New function: error_msg_ex(). Same 3-line console layout/style as
-// error_msg() above (still "> <input>" + "^~~~" pointing at a token), but used
-// for commands that parsed fine and only failed once we tried to *run* them
-// (e.g. "add card" on a relationship that doesn't exist). It labels the line
-// [RUNTIME ERROR] instead of [SYNTAX ERROR], and appends a short "why" hint in
-// parentheses so the message is actually useful instead of "for some reason ??".
-// error_msg() itself was left completely unchanged.
 void error_msg_ex(WINDOW *console_win, Parser *p, ErrorKind kind, const char *error, const char *hint) {
     int idx = p->current;
 
@@ -173,18 +173,13 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
             advance_token(&p->current);
             if (parse_add(p, console_win, &c)) {
                 if (c.type == TYPE_PROPERTY) {
-                    if (execute_addProperty(c)) {
+                    if (execute_addProperty(c, console_win)) {
                         // Sucess
                         Command *cmd = ARENA_PUSH_OBJECT(a, Command);
                         cmd->type = ADD;
                         cmd->cmds.add_command = c;
                         add_ast_node(a, tree, cmd);
                     } else {
-                        // Update => replaced the generic "for some reason" message
-                        // with error_msg_ex(): labels this a runtime error and adds a
-                        // hint. Most likely cause is c.identifier_name not matching
-                        // any existing entity/relationship, since get_element_by_name()
-                        // is what execute_addProperty() fails on first.
                         error_msg_ex(console_win, p, ERR_RUNTIME, "Could not add the property",
                                      "entity/relationship not found, or property already exists");
                         break;
@@ -223,6 +218,10 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
             if (parse_convert(p, console_win, &c)) {
                 if (c.type == MLD) {
                     if (convert_to_mld()) {
+                        Command *cmd = ARENA_PUSH_OBJECT(a, Command);
+                        cmd->type = CONVERT;
+                        cmd->cmds.convert_command = c;
+                        add_ast_node(a, tree, cmd);
                         show_msg(console_win, "Converted to MLD succesfully", "UPDATE");
                     }
                 } else if (c.type == SQL) {
@@ -381,7 +380,6 @@ bool parse_add_property(Parser *p, WINDOW *console, AddCommand *c) {
     Token t = peek_token(p->tokens, p->current);
     if (t.type == TOKEN_STRING) {
         // name of the entity/relationship
-
         if (strlen(t.value) == 0) {
             const char *error = "Empty Entity/Relationship name";
             error_msg(console, p, error);
@@ -438,7 +436,13 @@ bool parse_add_property_type(Parser *p, WINDOW *console, AddCommand *c) {
         strncpy(c->Data.p.prop_type, t.value, MAX_TYPE_LEN);
         c->Data.p.prop_type[MAX_TYPE_LEN - 1] = '\0';
         advance_token(&p->current);
-        return true;
+
+        if (parse_add_property_key(p, console, c)) {
+            return true;
+        } else {
+            return false; // avoid overridng the original error msg
+        }
+
     default:
         const char *error = "Expected a property type(money, str, date, int, double)";
         error_msg(console, p, error);
@@ -446,6 +450,33 @@ bool parse_add_property_type(Parser *p, WINDOW *console, AddCommand *c) {
     }
 }
 
+bool parse_add_property_key(Parser *p, WINDOW *console, AddCommand *c) {
+    Token t = peek_token(p->tokens, p->current);
+    switch (t.type) {
+    case TOKEN_KEY:
+        if (strcmp(t.value, "pk") == 0) {
+            c->Data.p.type = PRIMARY_KEY;
+            advance_token(&p->current);
+            return true;
+        } else if (strcmp(t.value, "fk") == 0) {
+            c->Data.p.type = FOREIGN_KEY;
+            advance_token(&p->current);
+            return true;
+        }
+
+    case TOKEN_EOF: // no key provided treat is as a default property
+        c->Data.p.type = NORMAL_KEY;
+        advance_token(&p->current);
+        return true;
+
+    default:
+        const char *error = "Expected Key type (pk, fk or none )";
+        error_msg(console, p, error);
+        return false;
+    }
+}
+
+// Doesn't search for properties or other element types
 Element *get_element_by_name(const char *name) {
     Element *el = malloc(sizeof(Element));
     if (!el) {
@@ -488,12 +519,6 @@ bool parse_add_cardinality(Parser *p, WINDOW *console, AddCommand *c) {
         strncpy(c->Data.c.r.name, t.value, MAX_NAME_LEN);
         c->Data.c.r.name[MAX_NAME_LEN - 1] = '\0';
 
-        // Update => this was the actual bug: execute_addCardinality() looks up the
-        // relationship using c.identifier_name, but only Data.c.r.name was being set
-        // here. identifier_name stayed "" (zero-initialized from "AddCommand c = {0}"
-        // in parse_command), so search_relationship("") always returned NULL and the
-        // command always failed with "Failed to execute Add card command for some
-        // reason ??", no matter what name you typed.
         strncpy(c->identifier_name, t.value, MAX_NAME_LEN);
         c->identifier_name[MAX_NAME_LEN - 1] = '\0';
 
@@ -534,20 +559,49 @@ bool parse_add_cardinality_value(Parser *p, WINDOW *console, AddCommand *c) {
     }
 }
 
-bool execute_addProperty(AddCommand c) {
+bool execute_addProperty(AddCommand c, WINDOW *console_win) {
     Element *el = get_element_by_name(c.identifier_name);
     if (!el) {
         return false;
     }
 
-    if (el->type == TYPE_ENTITY) {
-        if (addProperty(el->Element.e, c.Data.p.prop_name, c.Data.p.prop_type)) {
-            free(el);
-            return true;
+    KeyType key = c.Data.p.type;
+    if (key == NORMAL_KEY) {
+
+        if (el->type == TYPE_ENTITY) {
+            if (addProperty(el->Element.e, c.Data.p.prop_name, c.Data.p.prop_type, NORMAL_KEY)) {
+                free(el);
+                return true;
+            }
+        } else {
+            if (addPropertyRelationship(el->Element.r, c.Data.p.prop_name, c.Data.p.prop_type, NORMAL_KEY)) {
+                free(el);
+                return true;
+            }
         }
-    } else {
-        if (addPropertyRelationship(el->Element.r, c.Data.p.prop_name, c.Data.p.prop_type)) {
-            free(el);
+    } else if (key == PRIMARY_KEY) { // since foreign keys are only added during convertion to MLD
+        if (el->type == TYPE_ENTITY) {
+            if (addProperty(el->Element.e, c.Data.p.prop_name, c.Data.p.prop_type, PRIMARY_KEY)) {
+                free(el);
+                return true;
+            }
+        } else {
+            if (addPropertyRelationship(el->Element.r, c.Data.p.prop_name, c.Data.p.prop_type, PRIMARY_KEY)) {
+                free(el);
+                return true;
+            }
+        }
+
+    } else { // Foreign key but give a warning to the user he is violating MCD standards
+        if (global_objects.current_dtype == MCD) {
+            show_msg(console_win, "Adding a foreign key to a MCD diagram violates the standard", "WARNING");
+            if (addProperty(el->Element.e, c.Data.p.prop_name, c.Data.p.prop_type, FOREIGN_KEY)) {
+                free(el);
+                return true;
+            }
+        } else {
+            // Add foreign key to MLD (incase user want to do so...)
+
             return true;
         }
     }
@@ -591,4 +645,7 @@ bool parse_convert(Parser *p, WINDOW *win, ConvertCommand *c) {
     }
 }
 
-bool convert_to_mld(void) { return true; }
+bool convert_to_mld(void) {
+    global_objects.current_dtype = MLD;
+    return true;
+}

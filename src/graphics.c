@@ -113,14 +113,19 @@ void drawEntity(Entity *e) {
 
     for (int i = 0; i < e->num_properties; i++) {
         if (e->properties[i]) {
-            // Update => name bold + type dim instead of one flat snprintf("%s:%s").
-            // Total printed text is identical ("name:type", same length as
-            // before) so addProperty()'s width-growth math in MCD_elements.c is
-            // unaffected — only the attributes differ.
             int row = e->y + 3 + i;
             mvprintw(row, e->x + 1, "%-*s", e->width - 2, ""); // clear the row first
             attron(A_BOLD);
-            mvprintw(row, e->x + 1, "%s", e->properties[i]->name);
+            if (e->properties[i]->keytype == PRIMARY_KEY) {
+                attron(A_UNDERLINE);
+                mvprintw(row, e->x + 1, "%s", e->properties[i]->name);
+                attroff(A_UNDERLINE);
+            } else if (e->properties[i]->keytype == FOREIGN_KEY) {
+                mvprintw(row, e->x + 1, "*");
+                mvprintw(row, e->x + 2, "%s", e->properties[i]->name);
+            } else {
+                mvprintw(row, e->x + 1, "%s", e->properties[i]->name);
+            }
             attroff(A_BOLD);
             attron(A_DIM);
             mvprintw(row, e->x + 1 + (int)strlen(e->properties[i]->name), ":%s", e->properties[i]->type);
@@ -179,7 +184,14 @@ void drawRelationship(Relationship *r) {
             int row = r->y + 3 + i;
             mvprintw(row, r->x + 1, "%-*s", r->width - 2, ""); // clear the row first
             attron(A_BOLD);
-            mvprintw(row, r->x + 1, "%s", r->properties[i]->name);
+            if (r->properties[i]->keytype == PRIMARY_KEY) {
+                attron(A_UNDERLINE);
+                mvprintw(row, r->x + 1, "%s", r->properties[i]->name);
+                attroff(A_UNDERLINE);
+
+            } else { // no foreing key for relationships according to MCD standard
+                mvprintw(row, r->x + 1, "%s", r->properties[i]->name);
+            }
             attroff(A_BOLD);
             attron(A_DIM);
             mvprintw(row, r->x + 1 + (int)strlen(r->properties[i]->name), ":%s", r->properties[i]->type);
@@ -187,9 +199,9 @@ void drawRelationship(Relationship *r) {
         }
     }
 
-    // Update => small diamond accents just outside the corners. MCD notation
-    // conventionally draws relationships as diamonds/ovals instead of rectangles
-    // for entities, drawing like a  diamond/oval with ncurses and checking collisions
+    // added a small diamond outside the corners to satisfy the MCD notation
+    // which conventionally draws relationships as diamonds/ovals instead of rectangles
+    // for relationships, drawing diamond/oval in ncurses and checking collisions
     // good luck doing that.
 
     int max_y, max_x;
@@ -673,7 +685,8 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
     }
 
     wnoutrefresh(win);
-    //  touchwin(win);  force ncurses to not-optimise and draw the whole window (didn't work)
+    //  touchwin(win);
+    //  force ncurses to not-optimise and draw the whole window (didn't work)
 
     switch (page) {
     case Main:
@@ -932,6 +945,8 @@ void highlight_search_matches(HelpWindow *hwin, WINDOW *win, SearchResult *match
     doupdate();
 }
 
+// === Utility Functions ===
+
 void clear_console_log(WINDOW *console_win) {
 
     wmove(console_win, 1, 1);
@@ -942,4 +957,74 @@ void clear_console_log(WINDOW *console_win) {
 
     wmove(console_win, 3, 1);
     wclrtoeol(console_win);
+}
+
+// Debugging Functions (to be removed)
+
+WINDOW *create_ast_debug_window() {
+    int screen_height, screen_width;
+    getmaxyx(stdscr, screen_height, screen_width);
+
+    // Give it a reasonable height, e.g., 1/3rd of the screen, or max 50
+    int debug_height = (screen_height / 3 < 30) ? (screen_height / 3) : 30;
+    int start_y = 2; // Start near the top instead of 50
+    int start_x = 2;
+
+    WINDOW *debug_window = newwin(debug_height, screen_width / 2, start_y, start_x);
+
+    if (debug_window != NULL) {
+        box(debug_window, 0, 0);
+        mvwprintw(debug_window, 0, 2, " Console ");
+    } else {
+        // Handle the error gracefully, maybe log it
+    }
+
+    return debug_window;
+}
+void draw_ast_debug_window(WINDOW *debug_window, AST *tree) {
+    if (!debug_window || !tree)
+        return;
+
+    int win_height = getmaxy(debug_window);
+    werase(debug_window);
+    box(debug_window, 0, 0);
+
+    // Draw header inside local window space
+    wattron(debug_window, COLOR_PAIR(7) | A_BOLD);
+    mvwprintw(debug_window, 1, 1, "DEBUGGING AST:");
+    wattroff(debug_window, COLOR_PAIR(7) | A_BOLD);
+
+    ASTNode *temp = tree->head;
+    int local_y = 2; // Start printing content on line 2 (below the header)
+
+    // Stay within window boundaries (leave room for bottom border)
+    while (temp && local_y < win_height - 1) {
+        wmove(debug_window, local_y, 1);
+        wclrtoeol(debug_window);
+
+        if (temp->cmd->type == ADD) {
+            mvwprintw(debug_window, local_y, 2, "ADD: %s . %s (%s)", temp->cmd->cmds.add_command.identifier_name,
+                      temp->cmd->cmds.add_command.Data.p.prop_name, temp->cmd->cmds.add_command.Data.p.prop_type);
+        } else if (temp->cmd->type == CREATE) {
+            if (temp->cmd->cmds.create_command.type == TYPE_ENTITY) {
+                mvwprintw(debug_window, local_y, 2, "CR_ENT: %s", temp->cmd->cmds.create_command.Data.e.name);
+            } else if (temp->cmd->cmds.create_command.type == TYPE_RELATIONSHIP) {
+                mvwprintw(debug_window, local_y, 2, "CR_REL: %s", temp->cmd->cmds.create_command.Data.r.name);
+            }
+        } else if (temp->cmd->type == CONVERT) {
+            DiagramType curr = temp->cmd->cmds.convert_command.type;
+            if (curr == MCD) {
+                mvwprintw(debug_window, local_y, 2, "CONVERT: MCD");
+            } else if (curr == MLD) {
+                mvwprintw(debug_window, local_y, 2, "CONVERT: MLD");
+            } else if (curr == SQL) {
+                mvwprintw(debug_window, local_y, 2, "CONVERT: SQL");
+            }
+        }
+
+        local_y++;
+        temp = temp->next;
+    }
+
+    wnoutrefresh(debug_window);
 }

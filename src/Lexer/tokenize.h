@@ -11,6 +11,9 @@ typedef enum {
     TOKEN_ADD,
     TOKEN_PROPERTY,
     TOKEN_CARDINALITY,
+    TOKEN_KEY,
+    TOKEN_FK, // Foreign key
+    TOKEN_PK, // Primary  key
     TOKEN_CONVERT,
     TOKEN_MLD,
     TOKEN_SQL,
@@ -23,7 +26,7 @@ typedef enum {
     TOKEN_DOUBLE_TYPE,
     TOKEN_DATE_TYPE,
     TOKEN_MONEY_TYPE,
-    TOKEN_UNKNOWN // for weird unicode chars like tilde or @
+    TOKEN_UNKNOWN // for weird unicode chars like ~ or @
 } TokenType;
 
 typedef struct {

@@ -47,7 +47,7 @@ Entity *createEntity(const char *name, int x, int y) {
     return e;
 }
 
-bool addProperty(Entity *e, const char *prop_name, const char *prop_type) {
+bool addProperty(Entity *e, const char *prop_name, const char *prop_type, KeyType keytype) {
     if (e->num_properties >= MAX_PROPERTIES) {
         return false;
     }
@@ -65,6 +65,7 @@ bool addProperty(Entity *e, const char *prop_name, const char *prop_type) {
 
     strncpy(p1->name, prop_name, MAX_NAME_LEN - 1);
     strncpy(p1->type, prop_type, MAX_TYPE_LEN - 1);
+    p1->keytype = keytype;
     e->properties[e->num_properties] = p1;
     e->num_properties += 1;
     e->height += 1;
@@ -74,7 +75,7 @@ bool addProperty(Entity *e, const char *prop_name, const char *prop_type) {
     return true;
 }
 
-bool addPropertyRelationship(Relationship *r, const char *prop_name, const char *prop_type) {
+bool addPropertyRelationship(Relationship *r, const char *prop_name, const char *prop_type, KeyType keytype) {
     if (r->num_properties >= MAX_PROPERTIES) {
         return false;
     }
@@ -93,6 +94,7 @@ bool addPropertyRelationship(Relationship *r, const char *prop_name, const char 
 
     strncpy(p1->name, prop_name, MAX_NAME_LEN - 1);
     strncpy(p1->type, prop_type, MAX_TYPE_LEN - 1);
+    p1->keytype = keytype;
     r->properties[r->num_properties] = p1;
     r->num_properties += 1;
     r->height += 1;
