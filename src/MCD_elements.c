@@ -1,3 +1,13 @@
+// == CHANGES : ==
+// - addProperty(): the width-growth check now also reserves 1 extra column
+//   for the FOREIGN_KEY "*" prefix drawn by drawEntity(), so a FK property
+//   right at the width boundary doesn't get clipped.
+// - search_entity()/search_relationship(): added a NULL check on the array
+//   slot before dereferencing it. global_objects.relationships[]/.entities[]
+//   can now contain NULL holes (unregister_relationship() leaves them after
+//   an MLD conversion), and these two loops were the only ones in the
+//   codebase that didn't already guard against that (graphics.c's drawing/
+//   A* loops already did).
 #include "MCD_elements.h"
 #include "global_objects.h"
 #include <ncurses.h>
@@ -69,8 +79,9 @@ bool addProperty(Entity *e, const char *prop_name, const char *prop_type, KeyTyp
     e->properties[e->num_properties] = p1;
     e->num_properties += 1;
     e->height += 1;
-    if ((int)strlen(p1->name) + ((int)strlen(p1->type)) > (e->width - 2)) {
-        e->width += strlen(p1->name) + strlen(p1->type);
+    int key_prefix_len = (keytype == FOREIGN_KEY) ? 1 : 0;
+    if ((int)strlen(p1->name) + ((int)strlen(p1->type)) + key_prefix_len > (e->width - 2)) {
+        e->width += strlen(p1->name) + strlen(p1->type) + key_prefix_len;
     }
     return true;
 }
@@ -131,7 +142,7 @@ void tokenizeCardinalityInput(const char *input, char *card1, char *card2) {
 }
 
 void addCardinality(const char *input, Cardinality *c1, Cardinality *c2) {
-    // 1,n
+    // "1,n,n,1"
 
     if (!input || strlen(input) < 7) {
         // invalid input
@@ -142,6 +153,20 @@ void addCardinality(const char *input, Cardinality *c1, Cardinality *c2) {
     }
     char card1[4], card2[4];
     tokenizeCardinalityInput(input, card1, card2);
+
+    // if the order is reversed we switch it
+    if ((int)card1[2] < (int)card1[0]) {
+        char temp_card = card1[2];
+        card1[2] = card1[0];
+        card1[0] = temp_card;
+    }
+
+    if ((int)card2[2] < (int)card2[0]) {
+        char temp_card = card2[2];
+        card2[2] = card2[0];
+        card2[0] = temp_card;
+    }
+
     strncpy(c1->value, card1, CARDINALITY_LEN - 1);
     strncpy(c2->value, card2, CARDINALITY_LEN - 1);
     c1->value[CARDINALITY_LEN - 1] = '\0';
@@ -257,7 +282,7 @@ AttachPoint findBestAttachPoint(int box_x, int box_y, int box_width, int box_hei
 
 Entity *search_entity(const char *name) {
     for (int i = 0; i < global_objects.entity_count; i++) {
-        if (strcasecmp(name, global_objects.entities[i]->name) == 0) {
+        if (global_objects.entities[i] && strcasecmp(name, global_objects.entities[i]->name) == 0) {
             return global_objects.entities[i];
         }
     }
@@ -266,7 +291,7 @@ Entity *search_entity(const char *name) {
 
 Relationship *search_relationship(const char *name) {
     for (int i = 0; i < global_objects.relationship_count; i++) {
-        if (strcasecmp(name, global_objects.relationships[i]->name) == 0) {
+        if (global_objects.relationships[i] && strcasecmp(name, global_objects.relationships[i]->name) == 0) {
             return global_objects.relationships[i];
         }
     }

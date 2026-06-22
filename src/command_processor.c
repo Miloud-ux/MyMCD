@@ -3,13 +3,6 @@
 #include "Lexer/tokenize.h"
 #include <assert.h>
 #include <ctype.h>
-#include <string.h>
-
-static void to_lowercase(char *str) {
-    for (int i = 0; str[i]; i++) {
-        str[i] = tolower(str[i]);
-    }
-}
 
 void show_message(WINDOW *console_win, const char *msg) {
     wmove(console_win, 1, 1);

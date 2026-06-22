@@ -1,3 +1,10 @@
+// == CHANGES : ==
+// - convert_to_mld() signature changed from (void) to (WINDOW *console_win):
+//   it now needs to print its own success/warning message since the actual
+//   MCD->MLD migration can partially skip relationships.
+// - Added prototypes for the new "change name" command: parse_change_name,
+//   parse_change_name_value, execute_changeName (new section right before
+//   the clear command section).
 #pragma once
 #include "../DSA/AST.h" // includes arena.h
 #include "tokenize.h"
@@ -24,7 +31,7 @@ bool parse_create_entity(WINDOW *console, Parser *p, bool is_called, CreateComma
 bool parse_create_relationship(WINDOW *console, Parser *p, CreateCommand *c);
 
 // to be moved to a seperate file for execution
-void execute_create(CreateCommand c);
+bool execute_create(CreateCommand c);
 
 // Add property command
 bool parse_add(Parser *p, WINDOW *console, AddCommand *c);
@@ -42,7 +49,12 @@ bool execute_addCardinality(AddCommand c);
 
 // Convert to MLD command
 bool parse_convert(Parser *p, WINDOW *win, ConvertCommand *c);
-bool convert_to_mld(void);
+bool convert_to_mld(WINDOW *console_win);
+
+// Change name command
+bool parse_change_name(Parser *p, WINDOW *console, ChangeNameCommand *c);
+bool parse_change_name_value(Parser *p, WINDOW *console, ChangeNameCommand *c);
+bool execute_changeName(ChangeNameCommand c, WINDOW *console_win);
 
 // clear command
 void parse_clear();

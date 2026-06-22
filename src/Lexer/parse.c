@@ -1,3 +1,19 @@
+// == CHANGES : ==
+// - parse_command(): the TOKEN_CONVERT branch now calls convert_to_mld(console_win)
+//   instead of convert_to_mld(), and no longer calls show_msg() itself on success
+//   (convert_to_mld() now reports its own outcome). Added a new "else if (t.type ==
+//   TOKEN_CHANGE)" branch right after it to parse/execute the "change name" command.
+// - execute_addProperty(): rewrote the FOREIGN_KEY else-branch. MCD diagrams now
+//   reject adding a foreign key (warns and no-ops instead of silently adding it).
+//   MLD diagrams now actually add it (the old code warned-then-added for MCD, and
+//   silently did nothing for MLD - both flipped/fixed), and it now branches on
+//   el->type to support both entities and relationships instead of assuming entity.
+// - Added a new section (after execute_addCardinality, before parse_convert):
+//   parse_change_name(), parse_change_name_value(), execute_changeName().
+// - Added two static helpers (after parse_convert, before convert_to_mld):
+//   migrate_foreign_key() and create_junction_entity().
+// - convert_to_mld(): rewrote the body to actually perform the MCD->MLD
+//   transformation (was just setting current_dtype = MLD before).
 #include "parse.h"
 #include "../global_objects.h"
 #include <stdlib.h>
@@ -161,12 +177,17 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
             CreateCommand c = {0};
             advance_token(&p->current);
             if (parse_create(p, console_win, &c)) {
-                execute_create(c);
-                // Add it to ast
-                Command *cmd = ARENA_PUSH_OBJECT(a, Command);
-                cmd->type = CREATE;
-                cmd->cmds.create_command = c;
-                add_ast_node(a, tree, cmd);
+                if (execute_create(c)) {
+                    // Add it to ast
+                    Command *cmd = ARENA_PUSH_OBJECT(a, Command);
+                    cmd->type = CREATE;
+                    cmd->cmds.create_command = c;
+                    add_ast_node(a, tree, cmd);
+                } else {
+                    error_msg_ex(console_win, p, ERR_RUNTIME, "Could not create the entity/relationship",
+                                 "entity/relationship already exists or faced a memory issue");
+                    break;
+                }
             }
         } else if (t.type == TOKEN_ADD) {
             AddCommand c = {0};
@@ -217,16 +238,34 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
             advance_token(&p->current);
             if (parse_convert(p, console_win, &c)) {
                 if (c.type == MLD) {
-                    if (convert_to_mld()) {
+                    if (convert_to_mld(console_win)) {
                         Command *cmd = ARENA_PUSH_OBJECT(a, Command);
                         cmd->type = CONVERT;
                         cmd->cmds.convert_command = c;
                         add_ast_node(a, tree, cmd);
-                        show_msg(console_win, "Converted to MLD succesfully", "UPDATE");
                     }
                 } else if (c.type == SQL) {
                     // convert_to_sql();
                 }
+            }
+
+        } else if (t.type == TOKEN_CHANGE) {
+            ChangeNameCommand c = {0};
+            advance_token(&p->current);
+            if (parse_change_name(p, console_win, &c)) {
+                if (execute_changeName(c, console_win)) {
+                    Command *cmd = ARENA_PUSH_OBJECT(a, Command);
+                    cmd->type = CHANGE_NAME;
+                    cmd->cmds.change_name_command = c;
+                    add_ast_node(a, tree, cmd);
+                    show_msg(console_win, "Name changed succesfully", "UPDATE");
+                } else {
+                    error_msg_ex(console_win, p, ERR_RUNTIME, "Could not change the name",
+                                 "no entity/relationship with that name, or the new name is already taken");
+                    break;
+                }
+            } else {
+                return false;
             }
 
         } else if (t.type == TOKEN_CLEAR) {
@@ -289,7 +328,6 @@ bool parse_create_entity(WINDOW *console, Parser *p, bool is_called, CreateComma
     }
     return false;
 }
-// TODO : Add cardinality tokenization
 
 bool parse_create_relationship(WINDOW *console, Parser *p, CreateCommand *c) {
     Token t = peek_token(p->tokens, p->current);
@@ -337,12 +375,14 @@ bool parse_create_relationship(WINDOW *console, Parser *p, CreateCommand *c) {
     return false;
 }
 
-void execute_create(CreateCommand c) {
+bool execute_create(CreateCommand c) {
     if (c.type == TYPE_ENTITY) {
         if (!search_entity(c.Data.e.name)) {
             createEntity(c.Data.e.name, 10, 10);
+            return true;
         }
     } else {
+
         Entity *e1 = search_entity(c.Data.r.e1_name), *e2 = search_entity(c.Data.r.e2_name);
         if (!e1) {
             e1 = createEntity(c.Data.r.e1_name, 10, 10);
@@ -352,9 +392,14 @@ void execute_create(CreateCommand c) {
         }
         // allocation failed
         if (!e1 || !e2)
-            return;
-        addRelationship(10, 10, e1, e2, c.Data.r.name);
+            return false;
+
+        if (!search_relationship(c.Data.r.name)) {
+            addRelationship(10, 10, e1, e2, c.Data.r.name);
+            return true;
+        }
     }
+    return false;
 }
 
 bool parse_add(Parser *p, WINDOW *console, AddCommand *c) {
@@ -594,15 +639,23 @@ bool execute_addProperty(AddCommand c, WINDOW *console_win) {
 
     } else { // Foreign key but give a warning to the user he is violating MCD standards
         if (global_objects.current_dtype == MCD) {
-            show_msg(console_win, "Adding a foreign key to a MCD diagram violates the standard", "WARNING");
-            if (addProperty(el->Element.e, c.Data.p.prop_name, c.Data.p.prop_type, FOREIGN_KEY)) {
-                free(el);
-                return true;
-            }
+            show_msg(console_win, "Foreign keys aren't allowed in MCD diagrams, convert to MLD first", "WARNING");
+            free(el);
+            return true;
         } else {
             // Add foreign key to MLD (incase user want to do so...)
-
-            return true;
+            show_msg(console_win, "Adding a foreign key to a MLD diagram", "WARNING");
+            if (el->type == TYPE_ENTITY) {
+                if (addProperty(el->Element.e, c.Data.p.prop_name, c.Data.p.prop_type, FOREIGN_KEY)) {
+                    free(el);
+                    return true;
+                }
+            } else {
+                if (addPropertyRelationship(el->Element.r, c.Data.p.prop_name, c.Data.p.prop_type, FOREIGN_KEY)) {
+                    free(el);
+                    return true;
+                }
+            }
         }
     }
     free(el);
@@ -621,6 +674,83 @@ bool execute_addCardinality(AddCommand c) {
     }
 
     return false;
+}
+
+bool parse_change_name(Parser *p, WINDOW *console, ChangeNameCommand *c) {
+    Token t = peek_token(p->tokens, p->current);
+    if (t.type != TOKEN_NAME) {
+        const char *error = "Expected 'name' after change";
+        error_msg(console, p, error);
+        return false;
+    }
+    advance_token(&p->current);
+
+    t = peek_token(p->tokens, p->current);
+    if (t.type == TOKEN_STRING) {
+        if (strlen(t.value) == 0) {
+            const char *error = "Empty entity/relationship name";
+            error_msg(console, p, error);
+            return false;
+        }
+        strncpy(c->old_name, t.value, MAX_NAME_LEN);
+        c->old_name[MAX_NAME_LEN - 1] = '\0';
+        advance_token(&p->current);
+
+        if (parse_change_name_value(p, console, c)) {
+            return true;
+        }
+    } else {
+        const char *error = "Expected the current entity/relationship name";
+        error_msg(console, p, error);
+    }
+    return false;
+}
+
+bool parse_change_name_value(Parser *p, WINDOW *console, ChangeNameCommand *c) {
+    Token t = peek_token(p->tokens, p->current);
+    if (t.type == TOKEN_STRING) {
+        if (strlen(t.value) == 0) {
+            const char *error = "Empty new name";
+            error_msg(console, p, error);
+            return false;
+        }
+        strncpy(c->new_name, t.value, MAX_NAME_LEN);
+        c->new_name[MAX_NAME_LEN - 1] = '\0';
+        advance_token(&p->current);
+        return true;
+    } else {
+        const char *error = "Expected the new name";
+        error_msg(console, p, error);
+    }
+    return false;
+}
+
+bool execute_changeName(ChangeNameCommand c, WINDOW *console_win) {
+    Entity *e = search_entity(c.old_name);
+    Relationship *r = NULL;
+    if (!e) {
+        r = search_relationship(c.old_name);
+    }
+    if (!e && !r) {
+        return false;
+    }
+
+    Entity *clash_e = search_entity(c.new_name);
+    Relationship *clash_r = search_relationship(c.new_name);
+    bool clashes = (clash_e && clash_e != e) || (clash_r && clash_r != r);
+    if (clashes) {
+        show_msg(console_win, "An entity or relationship with that name already exists", "WARNING");
+        return false;
+    }
+
+    if (e) {
+        strncpy(e->name, c.new_name, MAX_NAME_LEN);
+        e->name[MAX_NAME_LEN - 1] = '\0';
+    } else {
+        strncpy(r->name, c.new_name, MAX_NAME_LEN);
+        r->name[MAX_NAME_LEN - 1] = '\0';
+    }
+    return true;
 }
 
 bool parse_convert(Parser *p, WINDOW *win, ConvertCommand *c) {
@@ -645,7 +775,105 @@ bool parse_convert(Parser *p, WINDOW *win, ConvertCommand *c) {
     }
 }
 
-bool convert_to_mld(void) {
+static void migrate_foreign_key(Entity *dst, Entity *src, Relationship *r) {
+    for (int i = 0; i < src->num_properties; i++) {
+        if (src->properties[i] && src->properties[i]->keytype == PRIMARY_KEY) {
+            addProperty(dst, src->properties[i]->name, src->properties[i]->type, FOREIGN_KEY);
+        }
+    }
+    for (int i = 0; i < r->num_properties; i++) {
+        if (r->properties[i]) {
+            addProperty(dst, r->properties[i]->name, r->properties[i]->type, r->properties[i]->keytype);
+        }
+    }
+}
+
+static bool create_junction_entity(Relationship *r, Entity *e1, Entity *e2) {
+    char junction_name[MAX_NAME_LEN];
+    snprintf(junction_name, MAX_NAME_LEN, "%s_%s", e1->name, e2->name);
+
+    if (search_entity(junction_name) || search_relationship(junction_name)) {
+        return false;
+    }
+
+    Entity *junction = createEntity(junction_name, r->x, r->y);
+    if (!junction) {
+        return false;
+    }
+
+    for (int i = 0; i < e1->num_properties; i++) {
+        if (e1->properties[i] && e1->properties[i]->keytype == PRIMARY_KEY) {
+            addProperty(junction, e1->properties[i]->name, e1->properties[i]->type, PRIMARY_KEY);
+        }
+    }
+    for (int i = 0; i < e2->num_properties; i++) {
+        if (e2->properties[i] && e2->properties[i]->keytype == PRIMARY_KEY) {
+            addProperty(junction, e2->properties[i]->name, e2->properties[i]->type, PRIMARY_KEY);
+        }
+    }
+    for (int i = 0; i < r->num_properties; i++) {
+        if (r->properties[i]) {
+            addProperty(junction, r->properties[i]->name, r->properties[i]->type, r->properties[i]->keytype);
+        }
+    }
+    return true;
+}
+
+bool convert_to_mld(WINDOW *console_win) {
+    bool had_skipped = false;
+
+    for (int i = 0; i < global_objects.relationship_count; i++) {
+        Relationship *r = global_objects.relationships[i];
+        if (!r) {
+            continue;
+        }
+        if (!r->cards[0] || !r->cards[1]) {
+            had_skipped = true;
+            continue;
+        }
+
+        char max1 = r->cards[0]->value[2];
+        char max2 = r->cards[1]->value[2];
+
+        if ((max1 != '1' && max1 != 'n') || (max2 != '1' && max2 != 'n')) {
+            had_skipped = true;
+            continue;
+        }
+
+        if (max1 == 'n' && max2 == 'n') {
+            if (!create_junction_entity(r, r->e1, r->e2)) {
+                had_skipped = true;
+                continue;
+            }
+            unregister_relationship(r);
+        } else if (max1 == '1' && max2 == 'n') {
+            migrate_foreign_key(r->e1, r->e2, r);
+            unregister_relationship(r);
+        } else if (max1 == 'n' && max2 == '1') {
+            migrate_foreign_key(r->e2, r->e1, r);
+            unregister_relationship(r);
+        } else {
+            char card1_min = r->cards[0]->value[0];
+            char card2_min = r->cards[1]->value[0];
+            if (card1_min == '1') {
+                migrate_foreign_key(r->e1, r->e2, r);
+            } else if (card2_min == '1') {
+                migrate_foreign_key(r->e2, r->e1, r);
+            } else {
+                migrate_foreign_key(r->e1, r->e2, r);
+            }
+            unregister_relationship(r);
+        }
+    }
+
     global_objects.current_dtype = MLD;
+
+    if (had_skipped) {
+        show_msg(console_win, "Converted to MLD, but some relationships were skipped (missing/invalid cardinality)",
+                 "WARNING");
+    } else {
+        show_msg(console_win, "Converted to MLD succesfully", "UPDATE");
+    }
+
     return true;
 }

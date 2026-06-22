@@ -1,3 +1,6 @@
+// == CHANGES : ==
+// - TokenType enum: added TOKEN_CHANGE and TOKEN_NAME (right after
+//   TOKEN_CLEAR) for the new "change name" command keywords.
 #ifndef SRC_TOKENIZE_H_
 #define SRC_TOKENIZE_H_
 
@@ -21,6 +24,8 @@ typedef enum {
     TOKEN_IDENTIFIER,
     TOKEN_HELP,
     TOKEN_CLEAR,
+    TOKEN_CHANGE,
+    TOKEN_NAME,
     TOKEN_INT_TYPE,
     TOKEN_STRING_TYPE,
     TOKEN_DOUBLE_TYPE,

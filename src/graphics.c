@@ -1,3 +1,14 @@
+// == CHANGES : ==
+// - draw_ast_debug_window(): added an "else if (temp->cmd->type == CHANGE_NAME)"
+//   branch after the CONVERT branch so the new command type renders in the
+//   AST debug window instead of being silently skipped.
+// - drawEntity(): fixed the FOREIGN_KEY rendering branch (the "*" prefix). The
+//   ":type" suffix was always printed at "e->x + 1 + strlen(name)", which is
+//   where the name would start WITHOUT the "*" - but the FK name is printed one
+//   column over (at "e->x + 2") to make room for the "*". So the ":type" print
+//   landed one column too far left and overwrote the property name's last
+//   character. Introduced a name_col variable that tracks where the name was
+//   actually printed (e->x + 1, or e->x + 2 for FK) and used it for both prints.
 #include "graphics.h"
 #include "DSA/astar.h"
 #include "DSA/kmp.h"
@@ -116,19 +127,21 @@ void drawEntity(Entity *e) {
             int row = e->y + 3 + i;
             mvprintw(row, e->x + 1, "%-*s", e->width - 2, ""); // clear the row first
             attron(A_BOLD);
+            int name_col = e->x + 1;
             if (e->properties[i]->keytype == PRIMARY_KEY) {
                 attron(A_UNDERLINE);
-                mvprintw(row, e->x + 1, "%s", e->properties[i]->name);
+                mvprintw(row, name_col, "%s", e->properties[i]->name);
                 attroff(A_UNDERLINE);
             } else if (e->properties[i]->keytype == FOREIGN_KEY) {
                 mvprintw(row, e->x + 1, "*");
-                mvprintw(row, e->x + 2, "%s", e->properties[i]->name);
+                name_col = e->x + 2;
+                mvprintw(row, name_col, "%s", e->properties[i]->name);
             } else {
-                mvprintw(row, e->x + 1, "%s", e->properties[i]->name);
+                mvprintw(row, name_col, "%s", e->properties[i]->name);
             }
             attroff(A_BOLD);
             attron(A_DIM);
-            mvprintw(row, e->x + 1 + (int)strlen(e->properties[i]->name), ":%s", e->properties[i]->type);
+            mvprintw(row, name_col + (int)strlen(e->properties[i]->name), ":%s", e->properties[i]->type);
             attroff(A_DIM);
         }
     }
@@ -1020,6 +1033,9 @@ void draw_ast_debug_window(WINDOW *debug_window, AST *tree) {
             } else if (curr == SQL) {
                 mvwprintw(debug_window, local_y, 2, "CONVERT: SQL");
             }
+        } else if (temp->cmd->type == CHANGE_NAME) {
+            mvwprintw(debug_window, local_y, 2, "CHANGE_NAME: %s -> %s", temp->cmd->cmds.change_name_command.old_name,
+                      temp->cmd->cmds.change_name_command.new_name);
         }
 
         local_y++;

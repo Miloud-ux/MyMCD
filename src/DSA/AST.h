@@ -1,3 +1,8 @@
+// == CHANGES : ==
+// - Added ChangeNameCommand struct (after ConvertCommand) to hold the
+//   old_name/new_name pair for the new "change name" command.
+// - CommandType enum: added CHANGE_NAME.
+// - CommandsContainer union: added change_name_command field.
 #pragma once
 
 #include "../MCD_elements.h"
@@ -54,17 +59,23 @@ typedef struct {
         } Data;
 } AddCommand;
 
-typedef enum { ADD, CREATE, CONVERT } CommandType;
+typedef enum { ADD, CREATE, CONVERT, CHANGE_NAME } CommandType;
 typedef enum { MCD, MLD, SQL } DiagramType;
 
 typedef struct {
         DiagramType type;
 } ConvertCommand;
 
+typedef struct {
+        char old_name[MAX_NAME_LEN];
+        char new_name[MAX_NAME_LEN];
+} ChangeNameCommand;
+
 typedef union {
         AddCommand add_command;
         CreateCommand create_command;
         ConvertCommand convert_command;
+        ChangeNameCommand change_name_command;
 } CommandsContainer;
 
 typedef struct {

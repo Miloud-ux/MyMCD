@@ -1,3 +1,7 @@
+// == CHANGES : ==
+// - tokenize_content(): added "change" -> TOKEN_CHANGE and "name" ->
+//   TOKEN_NAME branches to the keyword-matching if/else chain, right
+//   after the "clear" branch.
 #include "tokenize.h"
 #include <ctype.h>
 #include <string.h>
@@ -69,6 +73,10 @@ void tokenize_content(const char *content, Token tokens[], int *count) {
                 tokens[*count].type = TOKEN_CARDINALITY;
             } else if (strcmp(tokens[*count].value, "clear") == 0) {
                 tokens[*count].type = TOKEN_CLEAR;
+            } else if (strcmp(tokens[*count].value, "change") == 0) {
+                tokens[*count].type = TOKEN_CHANGE;
+            } else if (strcmp(tokens[*count].value, "name") == 0) {
+                tokens[*count].type = TOKEN_NAME;
             } else if (strcmp(tokens[*count].value, "money") == 0) {
                 tokens[*count].type = TOKEN_MONEY_TYPE;
             } else if (strcmp(tokens[*count].value, "int") == 0) {
