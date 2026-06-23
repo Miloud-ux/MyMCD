@@ -91,6 +91,8 @@ void tokenize_content(const char *content, Token tokens[], int *count) {
                 tokens[*count].type = TOKEN_KEY;
             } else if (strcmp(tokens[*count].value, "fk") == 0) {
                 tokens[*count].type = TOKEN_KEY;
+            } else if (strcmp(tokens[*count].value, "delete") == 0) {
+                tokens[*count].type = TOKEN_DELETE;
             } else if (strcmp(tokens[*count].value, "str") == 0) {
                 tokens[*count].type = TOKEN_STRING_TYPE;
             } else if (strcmp(tokens[*count].value, "double") == 0) {

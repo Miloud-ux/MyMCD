@@ -20,6 +20,7 @@ typedef enum {
     TOKEN_CONVERT,
     TOKEN_MLD,
     TOKEN_SQL,
+    TOKEN_DELETE,
     TOKEN_STRING,
     TOKEN_IDENTIFIER,
     TOKEN_HELP,

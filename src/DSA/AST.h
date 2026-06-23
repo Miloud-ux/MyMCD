@@ -1,8 +1,3 @@
-// == CHANGES : ==
-// - Added ChangeNameCommand struct (after ConvertCommand) to hold the
-//   old_name/new_name pair for the new "change name" command.
-// - CommandType enum: added CHANGE_NAME.
-// - CommandsContainer union: added change_name_command field.
 #pragma once
 
 #include "../MCD_elements.h"
@@ -27,6 +22,7 @@ typedef struct {
 
 typedef struct {
         char value[RAW_CARDINALITY_LEN];
+        char entity_name[MAX_NAME_LEN];
         RelationshipInfo r;
 } CardinalityInfo;
 

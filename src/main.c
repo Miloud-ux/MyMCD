@@ -7,6 +7,8 @@
 #include <ncurses.h>
 #include <string.h>
 
+#define MAX_COMMAND_HISTORY 50
+
 // Test diagram
 static void setup_large_e_commerce_delivery_mcd(void);
 
@@ -34,6 +36,9 @@ int main() {
     WINDOW *help_win = create_help_window();
     char input_buffer[256] = "";
     int input_len = 0;
+    char command_history[MAX_COMMAND_HISTORY][256];
+    int history_count = 0;
+    int history_index = -1;
     char search_buffer[MAX_SEARCH_BUFFER_LEN] = "";
     int search_len = 0;
     HelpAction Action = Navigation;
@@ -91,6 +96,19 @@ int main() {
             }
 
             if (ch == '\n') {
+                if (strlen(input_buffer) > 0) {
+                    if (history_count < MAX_COMMAND_HISTORY) {
+                        strncpy(command_history[history_count], input_buffer, 255);
+                        command_history[history_count][255] = '\0';
+                        history_count++;
+                    } else {
+                        for (int hist_i = 1; hist_i < MAX_COMMAND_HISTORY; hist_i++) {
+                            strcpy(command_history[hist_i - 1], command_history[hist_i]);
+                        }
+                        strncpy(command_history[MAX_COMMAND_HISTORY - 1], input_buffer, 255);
+                        command_history[MAX_COMMAND_HISTORY - 1][255] = '\0';
+                    }
+                }
                 if (strcmp(input_buffer, "exit") == 0 || strcmp(input_buffer, "quit") == 0) {
                     is_running = false;
                 } else if (strcmp(input_buffer, "help") == 0) {
@@ -107,6 +125,25 @@ int main() {
                 }
                 input_len = 0;
                 input_buffer[0] = '\0';
+                history_index = -1;
+            } else if (ch == KEY_UP) {
+                if (history_count > 0 && history_index < history_count - 1) {
+                    history_index++;
+                    strncpy(input_buffer, command_history[history_count - 1 - history_index], 255);
+                    input_buffer[255] = '\0';
+                    input_len = (int)strlen(input_buffer);
+                }
+            } else if (ch == KEY_DOWN) {
+                if (history_index > 0) {
+                    history_index--;
+                    strncpy(input_buffer, command_history[history_count - 1 - history_index], 255);
+                    input_buffer[255] = '\0';
+                    input_len = (int)strlen(input_buffer);
+                } else if (history_index == 0) {
+                    history_index = -1;
+                    input_len = 0;
+                    input_buffer[0] = '\0';
+                }
             } else if (ch == KEY_RESIZE) {
                 // TODO: impement a better resize handling
                 getmaxyx(stdscr, screen_height, screen_width);
@@ -135,6 +172,9 @@ int main() {
 
                 while (switching_moving_type) {
                     int moving_type = getch();
+                    if (global_objects.current_dtype == MLD && moving_type == 'r') {
+                        moving_type = 'e';
+                    }
                     bool moving_relationship = false;
                     bool moving_entity = false;
                     moving = true;

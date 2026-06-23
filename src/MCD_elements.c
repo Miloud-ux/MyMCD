@@ -1,15 +1,6 @@
-// == CHANGES : ==
-// - addProperty(): the width-growth check now also reserves 1 extra column
-//   for the FOREIGN_KEY "*" prefix drawn by drawEntity(), so a FK property
-//   right at the width boundary doesn't get clipped.
-// - search_entity()/search_relationship(): added a NULL check on the array
-//   slot before dereferencing it. global_objects.relationships[]/.entities[]
-//   can now contain NULL holes (unregister_relationship() leaves them after
-//   an MLD conversion), and these two loops were the only ones in the
-//   codebase that didn't already guard against that (graphics.c's drawing/
-//   A* loops already did).
 #include "MCD_elements.h"
 #include "global_objects.h"
+#include <ctype.h>
 #include <ncurses.h>
 #include <stdlib.h>
 #include <string.h>
@@ -174,15 +165,89 @@ void addCardinality(const char *input, Cardinality *c1, Cardinality *c2) {
 }
 
 bool addCardinalityAPI(const char *input, Relationship *r) {
-    Cardinality *c = malloc(sizeof(Cardinality) * 2);
+    Cardinality *c1 = malloc(sizeof(Cardinality));
+    Cardinality *c2 = malloc(sizeof(Cardinality));
+    if (!c1 || !c2) {
+        free(c1);
+        free(c2);
+        return false;
+    }
+    addCardinality(input, c1, c2);
+    c1->value[CARDINALITY_LEN - 1] = '\0';
+    c2->value[CARDINALITY_LEN - 1] = '\0';
+    if (r->cards[0]) {
+        free(r->cards[0]);
+    }
+    if (r->cards[1]) {
+        free(r->cards[1]);
+    }
+    r->cards[0] = c1;
+    r->cards[1] = c2;
+    return true;
+}
+
+void tokenizeCardinalitySide(const char *input, char *card) {
+    char buffer[10];
+    strncpy(buffer, input, 9);
+    buffer[9] = '\0';
+
+    char *token = strtok(buffer, ",");
+    int part = 0;
+
+    while (token && part < 2) {
+        if (part == 0)
+            card[0] = token[0];
+        if (part == 1)
+            card[2] = token[0];
+        part++;
+        token = strtok(NULL, ",");
+    }
+
+    card[1] = ',';
+    card[3] = '\0';
+}
+
+void addCardinalitySide(const char *input, Cardinality *c) {
+    if (!input || strlen(input) < 3) {
+        // invalid input
+        // assign a default value
+        strcpy(c->value, "x,x");
+        return;
+    }
+    char card[4];
+    tokenizeCardinalitySide(input, card);
+
+    // if the order is reversed we switch it
+    if ((int)card[2] < (int)card[0]) {
+        char temp_card = card[2];
+        card[2] = card[0];
+        card[0] = temp_card;
+    }
+
+    strncpy(c->value, card, CARDINALITY_LEN - 1);
+    c->value[CARDINALITY_LEN - 1] = '\0';
+}
+
+bool addCardinalityForEntity(const char *entity_name, const char *input, Relationship *r) {
+    int slot = -1;
+    if (r->e1 && mcd_strcasecmp(entity_name, r->e1->name) == 0) {
+        slot = 0;
+    } else if (r->e2 && mcd_strcasecmp(entity_name, r->e2->name) == 0) {
+        slot = 1;
+    } else {
+        return false;
+    }
+
+    Cardinality *c = malloc(sizeof(Cardinality));
     if (!c) {
         return false;
     }
-    addCardinality(input, &c[0], &c[1]);
-    c[0].value[CARDINALITY_LEN - 1] = '\0';
-    c[1].value[CARDINALITY_LEN - 1] = '\0';
-    r->cards[0] = &c[0];
-    r->cards[1] = &c[1];
+    addCardinalitySide(input, c);
+
+    if (r->cards[slot]) {
+        free(r->cards[slot]);
+    }
+    r->cards[slot] = c;
     return true;
 }
 
@@ -276,13 +341,11 @@ AttachPoint findBestAttachPoint(int box_x, int box_y, int box_width, int box_hei
     return best;
 }
 
-// Case insensitive
-// TODO: implement own strcasecmp to avoid redundant dependencies for non-linux
-// OS
+// Case insensitive (mcd_strcasecmp, defined below)
 
 Entity *search_entity(const char *name) {
     for (int i = 0; i < global_objects.entity_count; i++) {
-        if (global_objects.entities[i] && strcasecmp(name, global_objects.entities[i]->name) == 0) {
+        if (global_objects.entities[i] && mcd_strcasecmp(name, global_objects.entities[i]->name) == 0) {
             return global_objects.entities[i];
         }
     }
@@ -291,9 +354,22 @@ Entity *search_entity(const char *name) {
 
 Relationship *search_relationship(const char *name) {
     for (int i = 0; i < global_objects.relationship_count; i++) {
-        if (global_objects.relationships[i] && strcasecmp(name, global_objects.relationships[i]->name) == 0) {
+        if (global_objects.relationships[i] && mcd_strcasecmp(name, global_objects.relationships[i]->name) == 0) {
             return global_objects.relationships[i];
         }
     }
     return NULL;
+}
+
+int mcd_strcasecmp(const char *a, const char *b) {
+    while (*a && *b) {
+        char ca = (char)tolower((unsigned char)*a);
+        char cb = (char)tolower((unsigned char)*b);
+        if (ca != cb) {
+            return (unsigned char)ca - (unsigned char)cb;
+        }
+        a++;
+        b++;
+    }
+    return (unsigned char)*a - (unsigned char)*b;
 }

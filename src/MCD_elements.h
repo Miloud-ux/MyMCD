@@ -1,6 +1,4 @@
-#ifndef SCR_MCD_ELEMENTS_H_
-#define SCR_MCD_ELEMENTS_H_
-
+#pragma once
 #include <stdbool.h>
 #define MAX_NAME_LEN 15 // old val = 14
 #define MAX_TYPE_LEN 6
@@ -69,4 +67,7 @@ AttachPoint findBestAttachPoint(int box_x, int box_y, int box_width, int box_hei
 Entity *search_entity(const char *name);
 Relationship *search_relationship(const char *name);
 
-#endif // SCR_MCD_ELEMENTS_H_
+int mcd_strcasecmp(const char *a, const char *b);
+void tokenizeCardinalitySide(const char *input, char *card);
+void addCardinalitySide(const char *input, Cardinality *c);
+bool addCardinalityForEntity(const char *entity_name, const char *input, Relationship *r);

@@ -1,21 +1,6 @@
-// == CHANGES : ==
-// - parse_command(): the TOKEN_CONVERT branch now calls convert_to_mld(console_win)
-//   instead of convert_to_mld(), and no longer calls show_msg() itself on success
-//   (convert_to_mld() now reports its own outcome). Added a new "else if (t.type ==
-//   TOKEN_CHANGE)" branch right after it to parse/execute the "change name" command.
-// - execute_addProperty(): rewrote the FOREIGN_KEY else-branch. MCD diagrams now
-//   reject adding a foreign key (warns and no-ops instead of silently adding it).
-//   MLD diagrams now actually add it (the old code warned-then-added for MCD, and
-//   silently did nothing for MLD - both flipped/fixed), and it now branches on
-//   el->type to support both entities and relationships instead of assuming entity.
-// - Added a new section (after execute_addCardinality, before parse_convert):
-//   parse_change_name(), parse_change_name_value(), execute_changeName().
-// - Added two static helpers (after parse_convert, before convert_to_mld):
-//   migrate_foreign_key() and create_junction_entity().
-// - convert_to_mld(): rewrote the body to actually perform the MCD->MLD
-//   transformation (was just setting current_dtype = MLD before).
 #include "parse.h"
 #include "../global_objects.h"
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -30,9 +15,11 @@ void init_parser(Parser *p, const char *content) {
 
 void error_msg(WINDOW *console_win, Parser *p, const char *error) {
     int idx = p->current; // TODO: maybe -1 to track previous token but this might lead to out of bound error
-    if (idx < 0)          // TODO: needs further investigation
+    if (idx < 0) {        // TODO: needs further investigation
         idx = 0;
-    else {
+    } else if (idx == p->count) {
+
+    } else {
         idx--;
     }
 
@@ -100,6 +87,11 @@ void show_msg(WINDOW *console_win, const char *msg, const char *severity) {
     } else if (strcmp(severity, "UPDATE") == 0) {
         wattron(console_win, COLOR_PAIR(5));
         mvwprintw(console_win, 1, 1, "[UPDATE]: ");
+        wattroff(console_win, COLOR_PAIR(5));
+        mvwprintw(console_win, 1, 5 + len, "%s !", msg);
+    } else if (strcmp(severity, "INFO") == 0) {
+        wattron(console_win, COLOR_PAIR(5));
+        mvwprintw(console_win, 1, 1, "[INFO]: ");
         wattroff(console_win, COLOR_PAIR(5));
         mvwprintw(console_win, 1, 5 + len, "%s !", msg);
     } else if (strcmp(severity, "[LOGICAL ERROR]") == 0) {
@@ -188,6 +180,8 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
                                  "entity/relationship already exists or faced a memory issue");
                     break;
                 }
+            } else {
+                return false;
             }
         } else if (t.type == TOKEN_ADD) {
             AddCommand c = {0};
@@ -206,7 +200,7 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
                         break;
                     }
                 } else if (c.type == TYPE_CARDINALITY) {
-                    if (execute_addCardinality(c)) {
+                    if (execute_addCardinality(c, console_win)) {
                         // Sucess
                         Command *cmd = ARENA_PUSH_OBJECT(a, Command);
                         cmd->type = ADD;
@@ -218,7 +212,8 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
                         // hint. This branch fires when search_relationship(c.identifier_name)
                         // finds nothing, i.e. no relationship with that name exists yet.
                         error_msg_ex(console_win, p, ERR_RUNTIME, "Could not add the cardinality",
-                                     "no relationship with that name - check spelling or create it first");
+                                     "no relationship with that name, or (for the named-entity syntax) "
+                                     "that entity isn't part of this relationship");
                         break;
                     }
                 } else {
@@ -318,6 +313,17 @@ bool parse_create_entity(WINDOW *console, Parser *p, bool is_called, CreateComma
         if (!is_called) {
             advance_token(&p->current);
         }
+
+        if (strlen(t.value) == 0) {
+            const char *error = "Empty Entity name";
+            error_msg(console, p, error);
+            return false;
+        } else if (!valid_name(t.value)) {
+            const char *error = "Invalid Entity name (use alphanumerical characters only)";
+            error_msg(console, p, error);
+            return false;
+        }
+
         c->type = TYPE_ENTITY;
         strncpy(c->Data.e.name, t.value, MAX_NAME_LEN);
         c->Data.e.name[MAX_NAME_LEN - 1] = '\0';
@@ -333,6 +339,17 @@ bool parse_create_relationship(WINDOW *console, Parser *p, CreateCommand *c) {
     Token t = peek_token(p->tokens, p->current);
     if (t.type == TOKEN_STRING) {
         // get entities and then add relationship
+
+        if (strlen(t.value) == 0) {
+            const char *error = "Empty relationship  name";
+            error_msg(console, p, error);
+            return false;
+        } else if (!valid_name(t.value)) {
+            const char *error = "Invalid relationship name (use alphanumerical characters only)";
+            error_msg(console, p, error);
+            return false;
+        }
+
         advance_token(&p->current);
         bool Create_e1 = parse_create_entity(console, p, true, c);
         char e1_name[MAX_NAME_LEN];
@@ -359,7 +376,7 @@ bool parse_create_relationship(WINDOW *console, Parser *p, CreateCommand *c) {
 
         c->type = TYPE_RELATIONSHIP;
         strncpy(c->Data.r.name, t.value, MAX_NAME_LEN);
-        c->Data.e.name[MAX_NAME_LEN - 1] = '\0';
+        c->Data.r.name[MAX_NAME_LEN - 1] = '\0';
 
         strncpy(c->Data.r.e1_name, e1_name, MAX_NAME_LEN);
         c->Data.r.e1_name[MAX_NAME_LEN - 1] = '\0';
@@ -376,19 +393,24 @@ bool parse_create_relationship(WINDOW *console, Parser *p, CreateCommand *c) {
 }
 
 bool execute_create(CreateCommand c) {
+    static int x = 10;
+    static int y = 10;
+
     if (c.type == TYPE_ENTITY) {
         if (!search_entity(c.Data.e.name)) {
-            createEntity(c.Data.e.name, 10, 10);
+            createEntity(c.Data.e.name, x, y);
+            x = y += 10;
             return true;
         }
     } else {
-
         Entity *e1 = search_entity(c.Data.r.e1_name), *e2 = search_entity(c.Data.r.e2_name);
         if (!e1) {
-            e1 = createEntity(c.Data.r.e1_name, 10, 10);
+            e1 = createEntity(c.Data.r.e1_name, x, y);
+            x = y += 10;
         }
         if (!e2) {
-            e2 = createEntity(c.Data.r.e2_name, 10, 10);
+            e2 = createEntity(c.Data.r.e2_name, x, y);
+            x = y += 10;
         }
         // allocation failed
         if (!e1 || !e2)
@@ -591,11 +613,36 @@ bool parse_add_cardinality_value(Parser *p, WINDOW *console, AddCommand *c) {
             return false;
         }
 
-        strncpy(c->Data.c.value, t.value, RAW_CARDINALITY_LEN); // "1,n,n,0"
-        c->Data.c.value[RAW_CARDINALITY_LEN - 1] = '\0';
+        int comma_count = 0;
+        for (int i = 0; t.value[i] != '\0'; i++) {
+            if (t.value[i] == ',') {
+                comma_count++;
+            }
+        }
+
+        if (comma_count == 3) {
+            c->Data.c.entity_name[0] = '\0';
+            strncpy(c->Data.c.value, t.value, RAW_CARDINALITY_LEN); // "1,n,n,0"
+            c->Data.c.value[RAW_CARDINALITY_LEN - 1] = '\0';
+            advance_token(&p->current);
+            return true;
+        }
+
+        strncpy(c->Data.c.entity_name, t.value, MAX_NAME_LEN);
+        c->Data.c.entity_name[MAX_NAME_LEN - 1] = '\0';
         advance_token(&p->current);
 
-        return true;
+        Token t2 = peek_token(p->tokens, p->current);
+        if (t2.type == TOKEN_STRING && strlen(t2.value) > 0) {
+            strncpy(c->Data.c.value, t2.value, RAW_CARDINALITY_LEN);
+            c->Data.c.value[RAW_CARDINALITY_LEN - 1] = '\0';
+            advance_token(&p->current);
+            return true;
+        } else {
+            const char *error = "Expected that entity's cardinality value example: (\"1,n\")";
+            error_msg(console, p, error);
+            return false;
+        }
 
     } else {
         const char *error = "Expected cardinality value example: (\"1,n,0,1\"). type '\\help' for more details";
@@ -662,18 +709,26 @@ bool execute_addProperty(AddCommand c, WINDOW *console_win) {
     return false;
 }
 
-bool execute_addCardinality(AddCommand c) {
+bool execute_addCardinality(AddCommand c, WINDOW *console_win) {
     Relationship *r = search_relationship(c.identifier_name);
     if (!r) {
         // NO relationship found
         return false;
     }
 
-    if (addCardinalityAPI(c.Data.c.value, r)) {
-        return true;
+    if (strlen(c.Data.c.entity_name) == 0) {
+        if (addCardinalityAPI(c.Data.c.value, r)) {
+            char msg[128];
+            const char *e1_name = r->e1 ? r->e1->name : "?";
+            const char *e2_name = r->e2 ? r->e2->name : "?";
+            snprintf(msg, sizeof(msg), "First cardinality belongs to %s, second belongs to %s", e1_name, e2_name);
+            show_msg(console_win, msg, "INFO");
+            return true;
+        }
+        return false;
     }
 
-    return false;
+    return addCardinalityForEntity(c.Data.c.entity_name, c.Data.c.value, r);
 }
 
 bool parse_change_name(Parser *p, WINDOW *console, ChangeNameCommand *c) {
@@ -873,6 +928,17 @@ bool convert_to_mld(WINDOW *console_win) {
                  "WARNING");
     } else {
         show_msg(console_win, "Converted to MLD succesfully", "UPDATE");
+    }
+
+    return true;
+}
+
+// simple check for input
+bool valid_name(const char *name) {
+    for (size_t i = 0; i < strlen(name); i++) {
+        if (!isalnum(name[i])) {
+            return false;
+        }
     }
 
     return true;

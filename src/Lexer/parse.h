@@ -1,10 +1,3 @@
-// == CHANGES : ==
-// - convert_to_mld() signature changed from (void) to (WINDOW *console_win):
-//   it now needs to print its own success/warning message since the actual
-//   MCD->MLD migration can partially skip relationships.
-// - Added prototypes for the new "change name" command: parse_change_name,
-//   parse_change_name_value, execute_changeName (new section right before
-//   the clear command section).
 #pragma once
 #include "../DSA/AST.h" // includes arena.h
 #include "tokenize.h"
@@ -45,7 +38,7 @@ bool execute_addProperty(AddCommand c, WINDOW *console_win);
 //  Add cardinality command
 bool parse_add_cardinality(Parser *p, WINDOW *console, AddCommand *c);
 bool parse_add_cardinality_value(Parser *p, WINDOW *console, AddCommand *c);
-bool execute_addCardinality(AddCommand c);
+bool execute_addCardinality(AddCommand c, WINDOW *console_win);
 
 // Convert to MLD command
 bool parse_convert(Parser *p, WINDOW *win, ConvertCommand *c);
@@ -61,3 +54,5 @@ void parse_clear();
 
 // display commands
 void show_msg(WINDOW *console_win, const char *msg, const char *severity);
+
+bool valid_name(const char *name);
