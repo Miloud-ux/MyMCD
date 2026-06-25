@@ -1,6 +1,4 @@
-// == CHANGES : ==
-// - Added prototype for unregister_relationship(), used by convert_to_mld()
-//   in parse.c to remove a relationship once it's been migrated to MLD.
+
 #ifndef GLOBAL_OBJECTS_H
 #define GLOBAL_OBJECTS_H
 
