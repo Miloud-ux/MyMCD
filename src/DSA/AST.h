@@ -3,6 +3,8 @@
 #include "../MCD_elements.h"
 #include "../utils/arena_allocator.h"
 
+#define MAX_FILENAME_LEN 64
+
 /* == ASTNodes Data types == */
 typedef struct {
         char name[MAX_NAME_LEN];
@@ -55,7 +57,7 @@ typedef struct {
         } Data;
 } AddCommand;
 
-typedef enum { ADD, CREATE, CONVERT, CHANGE_NAME } CommandType;
+typedef enum { ADD, CREATE, CONVERT, CHANGE_NAME, SAVE, DELETE } CommandType;
 typedef enum { MCD, MLD, SQL } DiagramType;
 
 typedef struct {
@@ -67,11 +69,23 @@ typedef struct {
         char new_name[MAX_NAME_LEN];
 } ChangeNameCommand;
 
+typedef struct {
+        char name[MAX_NAME_LEN];
+} DeleteCommand;
+
+// Stores the diagram type and output filename for a "save MCD|MLD "file";" command.
+typedef struct {
+        DiagramType diagram_type;
+        char filename[MAX_FILENAME_LEN];
+} SaveCommand;
+
 typedef union {
         AddCommand add_command;
         CreateCommand create_command;
         ConvertCommand convert_command;
         ChangeNameCommand change_name_command;
+        SaveCommand save_command;
+        DeleteCommand delete_command;
 } CommandsContainer;
 
 typedef struct {

@@ -63,6 +63,7 @@ bool addProperty(Entity *e, const char *prop_name, const char *prop_type, KeyTyp
     if (p1 == NULL) {
         return false;
     }
+    memset(p1, 0, sizeof(Property));
 
     strncpy(p1->name, prop_name, MAX_NAME_LEN - 1);
     strncpy(p1->type, prop_type, MAX_TYPE_LEN - 1);
@@ -93,6 +94,7 @@ bool addPropertyRelationship(Relationship *r, const char *prop_name, const char 
     if (p1 == NULL) {
         return false;
     }
+    memset(p1, 0, sizeof(Property));
 
     strncpy(p1->name, prop_name, MAX_NAME_LEN - 1);
     strncpy(p1->type, prop_type, MAX_TYPE_LEN - 1);
@@ -359,6 +361,36 @@ Relationship *search_relationship(const char *name) {
         }
     }
     return NULL;
+}
+
+// == CHANGES : ==
+// - Added set_property_reference(): finds a property by name on an entity and
+//   fills its references[] field.  Called from parse.c after addProperty()
+//   during MLD conversion to record which entity the FK points to.
+//   Searches backwards from num_properties-1 since the property was just added.
+
+void set_property_reference(Entity *e, const char *prop_name, const char *ref_entity_name) {
+    if (!e || !prop_name || !ref_entity_name)
+        return;
+    for (int i = e->num_properties - 1; i >= 0; i--) {
+        if (e->properties[i] && strcmp(e->properties[i]->name, prop_name) == 0) {
+            strncpy(e->properties[i]->references, ref_entity_name, MAX_NAME_LEN - 1);
+            e->properties[i]->references[MAX_NAME_LEN - 1] = '\0';
+            return;
+        }
+    }
+}
+
+void set_property_reference_column(Entity *e, const char *prop_name, const char *ref_column_name) {
+    if (!e || !prop_name || !ref_column_name)
+        return;
+    for (int i = e->num_properties - 1; i >= 0; i--) {
+        if (e->properties[i] && strcmp(e->properties[i]->name, prop_name) == 0) {
+            strncpy(e->properties[i]->references_column, ref_column_name, MAX_NAME_LEN - 1);
+            e->properties[i]->references_column[MAX_NAME_LEN - 1] = '\0';
+            return;
+        }
+    }
 }
 
 int mcd_strcasecmp(const char *a, const char *b) {

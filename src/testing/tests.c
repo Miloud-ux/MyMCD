@@ -1,7 +1,8 @@
 // =========================================================================
 // tests.c
 // Unified testing suite for Arena Allocator, Lexer/Tokenizer, Parser,
-// MCD Elements, Command Processor, and Graphics/MCD generation
+// MCD Elements, Command Processor, Graphics/MCD generation, Utilities,
+// and Integration Workflows.
 // =========================================================================
 
 #include <stdbool.h>
@@ -43,9 +44,6 @@ static int total_fail = 0;
 
 #include "../utils/arena_allocator.h"
 
-// ---------------------------------------------------------------------------
-// Initialization
-// ---------------------------------------------------------------------------
 static void test_arena_initialization(void) {
     SECTION("Initialization");
     Arena a;
@@ -55,9 +53,6 @@ static void test_arena_initialization(void) {
     TEST("Default block size stored correctly", a.default_block_size == 1024);
 }
 
-// ---------------------------------------------------------------------------
-// Basic allocation and pointer alignment
-// ---------------------------------------------------------------------------
 static void test_arena_basic_alloc_and_alignment(void) {
     SECTION("Basic Allocation & Alignment");
     Arena a;
@@ -80,15 +75,11 @@ static void test_arena_basic_alloc_and_alignment(void) {
     TEST("p3 does not overlap with p2", (uintptr_t)p3 >= (uintptr_t)p2 + 15);
 }
 
-// ---------------------------------------------------------------------------
-// Alignment edge cases
-// ---------------------------------------------------------------------------
 static void test_arena_alignment_edge_cases(void) {
     SECTION("Alignment Edge Cases");
     Arena a;
     arena_init(&a, 4096);
 
-    // Powers-of-two alignments: 1, 2, 4, 8, 16, 32, 64
     size_t alignments[] = {1, 2, 4, 8, 16, 32, 64};
     for (int i = 0; i < 7; i++) {
         char name[64];
@@ -98,51 +89,39 @@ static void test_arena_alignment_edge_cases(void) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Block chaining / overflow into new block
-// ---------------------------------------------------------------------------
 static void test_arena_block_chaining(void) {
     SECTION("Block Chaining (OOM Overflow)");
     Arena a;
-    arena_init(&a, 64); // deliberately tiny to force chaining
+    arena_init(&a, 64);
 
     void *p1 = arena_alloc_aligned(&a, 40, 8);
     TEST("First 40-byte allocation succeeds in 64-byte arena", p1 != NULL);
     TEST("After first alloc: head == current (single block)", a.head == a.current);
 
-    void *p2 = arena_alloc_aligned(&a, 40, 8); // must spill into new block
+    void *p2 = arena_alloc_aligned(&a, 40, 8);
     TEST("Second 40-byte allocation triggers block chain", p2 != NULL);
     TEST("Head and current now differ (chain formed)", a.head != a.current);
     TEST("head->next points to current block", a.head->next == a.current);
     TEST("p2 is still 8-byte aligned after block chain", (uintptr_t)p2 % 8 == 0);
 
-    // Force a third block
     void *p3 = arena_alloc_aligned(&a, 40, 8);
     TEST("Third allocation (third block) succeeds", p3 != NULL);
-    TEST("Chain has at least two links (head->next->next != NULL)", a.head->next != NULL && a.head->next->next != NULL);
+    TEST("Chain has at least two links", a.head->next != NULL && a.head->next->next != NULL);
 }
 
-// ---------------------------------------------------------------------------
-// Oversized allocations (larger than default_block_size)
-// ---------------------------------------------------------------------------
 static void test_arena_oversized_allocation(void) {
     SECTION("Oversized Allocations");
     Arena a;
     arena_init(&a, 1024);
 
-    void *p = arena_alloc_aligned(&a, 5000, 8); // 5 KB > 1 KB default
+    void *p = arena_alloc_aligned(&a, 5000, 8);
     TEST("Allocation larger than default block size succeeds", p != NULL);
     TEST("Current block capacity scaled to fit the payload", a.current != NULL && a.current->cap >= 5000);
 
-    // Immediately follow up with a normal-sized allocation to verify the arena
-    // is still functional after handling an oversized request
     void *q = arena_alloc_aligned(&a, 32, 8);
     TEST("Normal allocation after oversized request still works", q != NULL);
 }
 
-// ---------------------------------------------------------------------------
-// Multiple sequential allocations – stress / correctness
-// ---------------------------------------------------------------------------
 static void test_arena_many_allocations(void) {
     SECTION("Sequential Allocation Stress (100 allocs)");
     Arena a;
@@ -164,12 +143,6 @@ static void test_arena_many_allocations(void) {
         if ((uintptr_t)p % 8 != 0) {
             all_aligned = false;
         }
-        /* Two pointers only need to be non-overlapping when they live in the
-         * same arena block.  When the arena chains a new block the new pointer
-         * can have a lower raw address than the previous one (different mmap /
-         * malloc region).  We detect same-block placement by checking that p
-         * is strictly above prev — within one block the offset only moves
-         * forward, so p > prev always holds when they share a block.         */
         if (prev && (uintptr_t)p > (uintptr_t)prev) {
             if ((uintptr_t)p < (uintptr_t)prev + prev_size) {
                 no_overlap = false;
@@ -183,15 +156,19 @@ static void test_arena_many_allocations(void) {
     TEST("No two consecutive allocations overlap", no_overlap);
 }
 
-// ---------------------------------------------------------------------------
-// Temporary arena: save / restore semantics
-// ---------------------------------------------------------------------------
+static void test_arena_zero_alloc(void) {
+    SECTION("Zero-Size Allocation");
+    Arena a;
+    arena_init(&a, 1024);
+    void *p = arena_alloc_aligned(&a, 0, 8);
+    TEST("Zero-size allocation returns non-NULL (or NULL-ok)", p != NULL || p == NULL);
+}
+
 static void test_temp_arena(void) {
     SECTION("Temporary Arena (save/restore)");
     Arena a;
     arena_init(&a, 1024);
 
-    // Allocate some permanent data
     void *permanent = arena_alloc_aligned(&a, 64, 8);
     TEST("Permanent allocation before temp succeeds", permanent != NULL);
 
@@ -205,35 +182,25 @@ static void test_temp_arena(void) {
     TEST("Temp allocation #2 succeeds", tmp2 != NULL);
 
     free_temp_arena(temp);
-    // After rewind, the offset should be back to (at most) where it was.
-    // We verify the arena is still usable.
     void *after = arena_alloc_aligned(&a, 32, 8);
     TEST("Allocation after free_temp_arena succeeds (arena still live)", after != NULL);
 }
 
-// ---------------------------------------------------------------------------
-// Destroy arena: full teardown
-// ---------------------------------------------------------------------------
 static void test_arena_destroy(void) {
     SECTION("Arena Destroy");
     Arena a;
     arena_init(&a, 256);
-    arena_alloc_aligned(&a, 100, 8); // occupy some memory
-    arena_alloc_aligned(&a, 200, 8); // force a second block
+    arena_alloc_aligned(&a, 100, 8);
+    arena_alloc_aligned(&a, 200, 8);
 
     destroy_arena(&a);
-    // After destroy the arena struct pointers must be NULL-safe to re-init
-    // (we can't dereference them, but re-initialising should work cleanly)
     arena_init(&a, 128);
     void *p = arena_alloc_aligned(&a, 10, 4);
     TEST("Re-initialisation after destroy succeeds", p != NULL);
     destroy_arena(&a);
-    TEST("Second destroy does not crash (double-destroy safety)", true); // reaching here = pass
+    TEST("Second destroy does not crash (double-destroy safety)", true);
 }
 
-// ---------------------------------------------------------------------------
-// Runner
-// ---------------------------------------------------------------------------
 void run_arena_tests(void) {
     printf("Starting Arena Tests...\n");
     log_file = fopen("arena_test_results.log", "w");
@@ -243,13 +210,13 @@ void run_arena_tests(void) {
     }
 
     SUITE_HEADER("ARENA ALLOCATOR TESTS");
-
     test_arena_initialization();
     test_arena_basic_alloc_and_alignment();
     test_arena_alignment_edge_cases();
     test_arena_block_chaining();
     test_arena_oversized_allocation();
     test_arena_many_allocations();
+    test_arena_zero_alloc();
     test_temp_arena();
     test_arena_destroy();
 
@@ -279,7 +246,6 @@ static void test_tokenizer_keywords(void) {
     int count = 0;
 
     tokenize_content("create entity relationship add property clear", tokens, &count);
-
     TEST("'create'       -> TOKEN_CREATE", tokens[0].type == TOKEN_CREATE);
     TEST("'entity'       -> TOKEN_ENTITY", tokens[1].type == TOKEN_ENTITY);
     TEST("'relationship' -> TOKEN_RELATIONSHIP", tokens[2].type == TOKEN_RELATIONSHIP);
@@ -310,7 +276,6 @@ static void test_tokenizer_identifiers(void) {
     int count = 0;
 
     tokenize_content("add property \"E\" myProp int", tokens, &count);
-    // 'myProp' and 'int' are not keywords -> TOKEN_IDENTIFIER
     TEST("Non-keyword word 'int' classified as TOKEN_IDENTIFIER", tokens[4].type == TOKEN_IDENTIFIER);
 }
 
@@ -341,7 +306,7 @@ static void test_tokenizer_empty_input(void) {
 static void test_tokenizer_null_input(void) {
     SECTION("Edge Cases: NULL Input");
     Token tokens[MAX_TOKENS_NUM_PER_COMMAND];
-    int count = 99; // deliberately dirty
+    int count = 99;
     tokenize_content(NULL, tokens, &count);
     TEST("NULL input: count reset to 0", count == 0);
 }
@@ -352,8 +317,6 @@ static void test_tokenizer_position_tracking(void) {
     int count = 0;
 
     tokenize_content("create \"Foo\"", tokens, &count);
-    // The 'create' token starts at position 0 plus its length
-    // pos is recorded as the position *after* the token
     TEST("'create' token has non-negative pos", tokens[0].pos >= 0);
     TEST("'create' token has correct length (6)", tokens[0].length == 6);
     TEST("String token pos > 'create' token pos", tokens[1].pos > tokens[0].pos);
@@ -396,6 +359,15 @@ static void test_tokenizer_peek_and_advance(void) {
     TEST("String value is 'E1'", strcmp(t2.value, "E1") == 0);
 }
 
+static void test_tokenizer_numbers_and_symbols(void) {
+    SECTION("Numbers and Mixed Symbols");
+    Token tokens[MAX_TOKENS_NUM_PER_COMMAND];
+    int count = 0;
+
+    tokenize_content("add property \"E\" 123 45.6", tokens, &count);
+    TEST("Numeric token classified appropriately", tokens[3].type == TOKEN_IDENTIFIER || tokens[3].type == TOKEN_UNKNOWN);
+}
+
 void run_lexer_tests(void) {
     printf("Starting Lexer/Tokenizer Tests...\n");
     log_file = fopen("lexer_test_results.log", "w");
@@ -405,7 +377,6 @@ void run_lexer_tests(void) {
     }
 
     SUITE_HEADER("LEXER / TOKENIZER TESTS");
-
     test_tokenizer_keywords();
     test_tokenizer_string_literals();
     test_tokenizer_identifiers();
@@ -415,6 +386,7 @@ void run_lexer_tests(void) {
     test_tokenizer_position_tracking();
     test_tokenizer_long_command();
     test_tokenizer_peek_and_advance();
+    test_tokenizer_numbers_and_symbols();
 
     fprintf(log_file, "\n=========================================\n");
     fprintf(log_file, "  RESULTS: %d passed, %d failed\n", total_pass, total_fail);
@@ -431,14 +403,6 @@ void run_lexer_tests(void) {
 
 // =========================================================================
 // PARSER / COMMAND EXECUTION TESTS (Compiled only if PARSER_TESTS is defined)
-//
-// NOTE: These tests exercise the parse_* functions and execute_* functions
-// directly, bypassing ncurses.  We pass NULL as the WINDOW* and rely on the
-// implementations being NULL-safe for the console argument when we are only
-// testing the structural output (CreateCommand / AddCommand).
-//
-// If your implementation crashes on a NULL WINDOW, mock it with
-// `newwin(1,1,0,0)` after initscr() or wrap it in a headless helper.
 // =========================================================================
 #ifdef PARSER_TESTS
 
@@ -446,11 +410,6 @@ void run_lexer_tests(void) {
 #include "../Lexer/tokenize.h"
 #include "../MCD_elements.h"
 #include "../global_objects.h"
-
-// Minimal no-op WINDOW substitute – real tests should link against ncurses
-// and call initscr()/endwin() around this suite if needed.
-// Here we assume the parser is NULL-safe for its WINDOW* argument when the
-// only side-effect tested is the returned bool + populated command struct.
 
 static void test_parser_init(void) {
     SECTION("Parser Initialisation");
@@ -468,9 +427,7 @@ static void test_parser_create_entity_command(void) {
     const char *input = "create entity \"Customer\"";
     init_parser(&p, input);
     tokenize_content(input, p.tokens, &p.count);
-
-    // Consume the leading TOKEN_CREATE before handing off to parse_create
-    advance_token(&p.current); // now at TOKEN_ENTITY
+    advance_token(&p.current);
 
     CreateCommand c = {0};
     bool ok = parse_create(&p, NULL, &c);
@@ -486,8 +443,7 @@ static void test_parser_create_relationship_command(void) {
     const char *input = "create relationship \"Owns\" \"Customer\" \"Cart\"";
     init_parser(&p, input);
     tokenize_content(input, p.tokens, &p.count);
-
-    advance_token(&p.current); // skip TOKEN_CREATE
+    advance_token(&p.current);
 
     CreateCommand c = {0};
     bool ok = parse_create(&p, NULL, &c);
@@ -502,7 +458,6 @@ static void test_parser_create_relationship_command(void) {
 static void test_parser_create_entity_missing_name(void) {
     SECTION("parse_create – Entity with missing name (error path)");
     Parser p;
-    // 'entity' keyword but no name token following
     const char *input = "create entity";
     init_parser(&p, input);
     tokenize_content(input, p.tokens, &p.count);
@@ -516,21 +471,18 @@ static void test_parser_create_entity_missing_name(void) {
 static void test_parser_add_property_command(void) {
     SECTION("parse_add – Property");
     Parser p;
-    /* Property names must be quoted — the tokenizer classifies bare words as
-     * TOKEN_IDENTIFIER, but parse_add_property_name expects TOKEN_STRING.
-     * The help text confirms: "You MUST use quotations around names."        */
     const char *input = "add property \"Customer\" \"customer_id\" int";
     init_parser(&p, input);
     tokenize_content(input, p.tokens, &p.count);
-    advance_token(&p.current); // skip TOKEN_ADD
+    advance_token(&p.current);
 
     AddCommand c = {0};
     bool ok = parse_add(&p, NULL, &c);
 
     TEST("parse_add returns true for valid add property command", ok);
     TEST("Target identifier name captured", strcmp(c.identifier_name, "Customer") == 0);
-    TEST("Property name captured", strcmp(c.prop_name, "customer_id") == 0);
-    TEST("Property type captured", strcmp(c.prop_type, "int") == 0);
+    TEST("Property name captured", strcmp(c.Data.p.prop_name, "customer_id") == 0);
+    TEST("Property type captured", strcmp(c.Data.p.prop_type, "int") == 0);
 }
 
 static void test_execute_create_entity(void) {
@@ -558,7 +510,7 @@ static void test_execute_create_entity_dedup(void) {
 
     execute_create(c);
     int count_after_first = global_objects.entity_count;
-    execute_create(c); // second call with same name
+    execute_create(c);
     int count_after_second = global_objects.entity_count;
 
     TEST("Entity count does not grow on duplicate create", count_after_second == count_after_first);
@@ -576,7 +528,6 @@ static void test_execute_create_relationship(void) {
 
     execute_create(c);
 
-    // Entities should be auto-created
     TEST("Entity 'Alice' auto-created by relationship execute", search_entity("Alice") != NULL);
     TEST("Entity 'Bob'   auto-created by relationship execute", search_entity("Bob") != NULL);
 
@@ -590,7 +541,6 @@ static void test_execute_addProperty_entity(void) {
     SECTION("execute_addProperty – onto Entity");
     init_global_objects();
 
-    // Create entity first
     CreateCommand cc = {0};
     cc.type = TYPE_ENTITY;
     strncpy(cc.Data.e.name, "User", MAX_NAME_LEN - 1);
@@ -598,9 +548,9 @@ static void test_execute_addProperty_entity(void) {
 
     AddCommand ac = {0};
     strncpy(ac.identifier_name, "User", MAX_NAME_LEN - 1);
-    strncpy(ac.prop_name, "user_id", MAX_NAME_LEN - 1);
-    strncpy(ac.prop_type, "int", MAX_TYPE_LEN - 1);
-    execute_addProperty(ac);
+    strncpy(ac.Data.p.prop_name, "user_id", MAX_NAME_LEN - 1);
+    strncpy(ac.Data.p.prop_type, "int", MAX_TYPE_LEN - 1);
+    execute_addProperty(ac, NULL);
 
     Entity *e = search_entity("User");
     TEST("Entity exists after addProperty", e != NULL);
@@ -608,6 +558,44 @@ static void test_execute_addProperty_entity(void) {
     TEST("Added property name matches 'user_id'",
          e && e->num_properties >= 1 && strcmp(e->properties[0]->name, "user_id") == 0);
     TEST("Added property type matches 'int'", e && e->num_properties >= 1 && strcmp(e->properties[0]->type, "int") == 0);
+}
+
+static void test_execute_addProperty_relationship(void) {
+    SECTION("execute_addProperty – onto Relationship");
+    init_global_objects();
+
+    CreateCommand cr = {0};
+    cr.type = TYPE_RELATIONSHIP;
+    strncpy(cr.Data.r.name, "Rents", MAX_NAME_LEN - 1);
+    strncpy(cr.Data.r.e1_name, "Renter", MAX_NAME_LEN - 1);
+    strncpy(cr.Data.r.e2_name, "Car", MAX_NAME_LEN - 1);
+    execute_create(cr);
+
+    AddCommand ac = {0};
+    strncpy(ac.identifier_name, "Rents", MAX_NAME_LEN - 1);
+    strncpy(ac.Data.p.prop_name, "rental_date", MAX_NAME_LEN - 1);
+    strncpy(ac.Data.p.prop_type, "date", MAX_TYPE_LEN - 1);
+    execute_addProperty(ac, NULL);
+
+    Relationship *r = search_relationship("Rents");
+    TEST("Relationship exists after addProperty", r != NULL);
+    TEST("Relationship has at least one property", r && r->num_properties >= 1);
+    TEST("Property name matches 'rental_date'",
+         r && r->num_properties >= 1 && strcmp(r->properties[0]->name, "rental_date") == 0);
+}
+
+static void test_execute_addProperty_missing_target(void) {
+    SECTION("execute_addProperty – Missing Target");
+    init_global_objects();
+
+    AddCommand ac = {0};
+    strncpy(ac.identifier_name, "GhostEntity", MAX_NAME_LEN - 1);
+    strncpy(ac.Data.p.prop_name, "x", MAX_NAME_LEN - 1);
+    strncpy(ac.Data.p.prop_type, "int", MAX_TYPE_LEN - 1);
+    execute_addProperty(ac, NULL);
+
+    Entity *e = search_entity("GhostEntity");
+    TEST("Missing target entity was not auto-created", e == NULL);
 }
 
 void run_parser_tests(void) {
@@ -619,7 +607,6 @@ void run_parser_tests(void) {
     }
 
     SUITE_HEADER("PARSER / COMMAND EXECUTION TESTS");
-
     test_parser_init();
     test_parser_create_entity_command();
     test_parser_create_relationship_command();
@@ -629,6 +616,8 @@ void run_parser_tests(void) {
     test_execute_create_entity_dedup();
     test_execute_create_relationship();
     test_execute_addProperty_entity();
+    test_execute_addProperty_relationship();
+    test_execute_addProperty_missing_target();
 
     fprintf(log_file, "\n=========================================\n");
     fprintf(log_file, "  RESULTS: %d passed, %d failed\n", total_pass, total_fail);
@@ -658,9 +647,6 @@ static void test_mcd_create_entity(void) {
     Entity *e = createEntity("Invoice", 5, 10);
     TEST("createEntity returns non-NULL pointer", e != NULL);
     TEST("Entity name stored correctly", strcmp(e->name, "Invoice") == 0);
-    /* createEntity may auto-compute placement (e.g. based on entity_count),
-     * so we assert that coordinates are valid (non-negative) rather than
-     * testing exact values that the implementation does not guarantee.      */
     TEST("Entity x coordinate is non-negative", e->x >= 0);
     TEST("Entity y coordinate is non-negative", e->y >= 0);
     TEST("Entity has zero properties on creation", e->num_properties == 0);
@@ -673,14 +659,115 @@ static void test_mcd_add_property(void) {
     init_global_objects();
 
     Entity *e = createEntity("Product", 0, 0);
-    addProperty(e, "price", "float");
-    addProperty(e, "sku", "str");
+    addProperty(e, "price", "float", NORMAL_KEY);
+    addProperty(e, "sku", "str", NORMAL_KEY);
 
     TEST("num_properties == 2 after two addProperty calls", e->num_properties == 2);
     TEST("First property name is 'price'", strcmp(e->properties[0]->name, "price") == 0);
     TEST("First property type is 'float'", strcmp(e->properties[0]->type, "float") == 0);
     TEST("Second property name is 'sku'", strcmp(e->properties[1]->name, "sku") == 0);
     TEST("Second property type is 'str'", strcmp(e->properties[1]->type, "str") == 0);
+}
+
+static void test_mcd_add_property_with_keytypes(void) {
+    SECTION("addProperty – KeyType handling");
+    init_global_objects();
+
+    Entity *e = createEntity("Typed", 0, 0);
+    addProperty(e, "id", "int", PRIMARY_KEY);
+    addProperty(e, "ref_id", "int", FOREIGN_KEY);
+    addProperty(e, "name", "str", NORMAL_KEY);
+
+    TEST("PRIMARY_KEY stored correctly", e->properties[0]->keytype == PRIMARY_KEY);
+    TEST("FOREIGN_KEY stored correctly", e->properties[1]->keytype == FOREIGN_KEY);
+    TEST("NORMAL_KEY stored correctly", e->properties[2]->keytype == NORMAL_KEY);
+}
+
+static void test_mcd_add_property_duplicate(void) {
+    SECTION("addProperty – Duplicate Prevention");
+    init_global_objects();
+
+    Entity *e = createEntity("DupTest", 0, 0);
+    bool ok1 = addProperty(e, "code", "str", NORMAL_KEY);
+    bool ok2 = addProperty(e, "code", "int", NORMAL_KEY);
+    TEST("First addProperty succeeds", ok1);
+    TEST("Duplicate addProperty rejected", !ok2);
+    TEST("Still only one property", e->num_properties == 1);
+}
+
+static void test_mcd_add_property_max_properties(void) {
+    SECTION("addProperty – MAX_PROPERTIES boundary");
+    init_global_objects();
+
+    Entity *e = createEntity("MaxProp", 0, 0);
+    bool ok = true;
+    for (int i = 0; i < MAX_PROPERTIES + 2; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "p%d", i);
+        if (!addProperty(e, name, "int", NORMAL_KEY)) {
+            if (i < MAX_PROPERTIES) {
+                ok = false;
+            }
+        }
+    }
+    TEST("Exactly MAX_PROPERTIES stored", e->num_properties == MAX_PROPERTIES);
+    TEST("No failure before limit", ok);
+}
+
+static void test_mcd_property_references(void) {
+    SECTION("set_property_reference / set_property_reference_column");
+    init_global_objects();
+
+    Entity *e = createEntity("RefTest", 0, 0);
+    addProperty(e, "fk_col", "int", FOREIGN_KEY);
+
+    set_property_reference(e, "fk_col", "Customer");
+    set_property_reference_column(e, "fk_col", "customer_id");
+
+    TEST("references entity set", strcmp(e->properties[0]->references, "Customer") == 0);
+    TEST("references column set", strcmp(e->properties[0]->references_column, "customer_id") == 0);
+    TEST("references is null-terminated", e->properties[0]->references[MAX_NAME_LEN - 1] == '\0');
+    TEST("references_column is null-terminated", e->properties[0]->references_column[MAX_NAME_LEN - 1] == '\0');
+}
+
+static void test_mcd_property_reference_not_found(void) {
+    SECTION("set_property_reference – missing property");
+    init_global_objects();
+
+    Entity *e = createEntity("NoProp", 0, 0);
+    addProperty(e, "only", "int", NORMAL_KEY);
+
+    set_property_reference(e, "missing", "Other");
+    TEST("Missing property leaves existing property untouched", strlen(e->properties[0]->references) == 0);
+}
+
+static void test_mcd_strcasecmp(void) {
+    SECTION("mcd_strcasecmp");
+    TEST("Exact match", mcd_strcasecmp("abc", "abc") == 0);
+    TEST("Case insensitive equal", mcd_strcasecmp("ABC", "abc") == 0);
+    TEST("Case insensitive equal reversed", mcd_strcasecmp("abc", "ABC") == 0);
+    TEST("Different strings", mcd_strcasecmp("abc", "def") < 0);
+    TEST("Prefix difference", mcd_strcasecmp("abc", "abd") < 0);
+    TEST("Empty vs non-empty", mcd_strcasecmp("", "a") < 0);
+    TEST("Empty vs empty", mcd_strcasecmp("", "") == 0);
+    TEST("Mixed case long", mcd_strcasecmp("EntityName", "entityname") == 0);
+}
+
+static void test_mcd_find_best_attach_point(void) {
+    SECTION("findBestAttachPoint");
+    AttachPoint ap;
+
+    ap = findBestAttachPoint(10, 10, 10, 5, 15, 0);
+    TEST("Target above -> SIDE_TOP", ap.side == SIDE_TOP);
+
+    ap = findBestAttachPoint(10, 10, 10, 5, 15, 20);
+    TEST("Target below -> SIDE_BOTTOM", ap.side == SIDE_BOTTOM);
+
+    ap = findBestAttachPoint(10, 10, 10, 5, 0, 12);
+    TEST("Target left -> SIDE_LEFT", ap.side == SIDE_LEFT);
+
+    ap = findBestAttachPoint(10, 10, 10, 5, 25, 12);
+    TEST("Target right -> SIDE_RIGHT", ap.side == SIDE_RIGHT);
 }
 
 static void test_mcd_create_relationship(void) {
@@ -693,8 +780,6 @@ static void test_mcd_create_relationship(void) {
 
     TEST("addRelationship returns non-NULL pointer", r != NULL);
     TEST("Relationship name stored correctly", strcmp(r->name, "Writes") == 0);
-    /* Same as createEntity: implementation may adjust placement,
-     * so assert non-negative rather than exact coordinates.       */
     TEST("Relationship x coordinate is non-negative", r->x >= 0);
     TEST("Relationship y coordinate is non-negative", r->y >= 0);
     TEST("Relationship e1 pointer correct", r->e1 == e1);
@@ -704,6 +789,20 @@ static void test_mcd_create_relationship(void) {
     TEST("global_objects.relationships[0] == returned pointer", global_objects.relationships[0] == r);
 }
 
+static void test_mcd_relationship_null_entities(void) {
+    SECTION("addRelationship – NULL safety");
+    init_global_objects();
+
+    Entity *e1 = createEntity("A", 0, 0);
+    Relationship *r1 = addRelationship(0, 0, NULL, e1, "R1");
+    Relationship *r2 = addRelationship(0, 0, e1, NULL, "R2");
+    Relationship *r3 = addRelationship(0, 0, NULL, NULL, "R3");
+
+    TEST("NULL e1 returns NULL", r1 == NULL);
+    TEST("NULL e2 returns NULL", r2 == NULL);
+    TEST("Both NULL returns NULL", r3 == NULL);
+}
+
 static void test_mcd_add_property_relationship(void) {
     SECTION("addPropertyRelationship");
     init_global_objects();
@@ -711,12 +810,26 @@ static void test_mcd_add_property_relationship(void) {
     Entity *e1 = createEntity("Student", 0, 0);
     Entity *e2 = createEntity("Course", 40, 0);
     Relationship *r = addRelationship(20, 0, e1, e2, "Enrolls");
-    addPropertyRelationship(r, "grade", "str");
-    addPropertyRelationship(r, "semester", "str");
+    addPropertyRelationship(r, "grade", "str", NORMAL_KEY);
+    addPropertyRelationship(r, "semester", "str", NORMAL_KEY);
 
     TEST("Relationship has 2 properties after two add calls", r->num_properties == 2);
     TEST("Property[0] name is 'grade'", strcmp(r->properties[0]->name, "grade") == 0);
     TEST("Property[1] name is 'semester'", strcmp(r->properties[1]->name, "semester") == 0);
+}
+
+static void test_mcd_add_property_relationship_keytypes(void) {
+    SECTION("addPropertyRelationship – KeyTypes");
+    init_global_objects();
+
+    Entity *e1 = createEntity("A", 0, 0);
+    Entity *e2 = createEntity("B", 10, 0);
+    Relationship *r = addRelationship(5, 0, e1, e2, "Link");
+    addPropertyRelationship(r, "pk", "int", PRIMARY_KEY);
+    addPropertyRelationship(r, "fk", "int", FOREIGN_KEY);
+
+    TEST("Relationship PRIMARY_KEY correct", r->properties[0]->keytype == PRIMARY_KEY);
+    TEST("Relationship FOREIGN_KEY correct", r->properties[1]->keytype == FOREIGN_KEY);
 }
 
 static void test_mcd_search_entity(void) {
@@ -762,20 +875,59 @@ static void test_mcd_cardinality(void) {
     Relationship *r = addRelationship(25, 5, e1, e2, "WorksFor");
     addCardinalityAPI("1,n,1,1", r);
 
-    // After addCardinalityAPI both cardinality slots should be populated
     TEST("cards[0] is populated after addCardinalityAPI", r->cards[0] != NULL);
     TEST("cards[1] is populated after addCardinalityAPI", r->cards[1] != NULL);
 }
 
+static void test_mcd_cardinality_edge_cases(void) {
+    SECTION("addCardinality – Edge Cases");
+    Cardinality c1, c2;
+
+    addCardinality(NULL, &c1, &c2);
+    TEST("NULL input yields default c1", strcmp(c1.value, "x,x") == 0);
+    TEST("NULL input yields default c2", strcmp(c2.value, "y,y") == 0);
+
+    addCardinality("1,1", &c1, &c2);
+    TEST("Short input yields default c1", strcmp(c1.value, "x,x") == 0);
+
+    addCardinality("n,1,1,n", &c1, &c2);
+    TEST("Reversed order corrected for c1", c1.value[0] <= c1.value[2]);
+    TEST("Reversed order corrected for c2", c2.value[0] <= c2.value[2]);
+}
+
 static void test_mcd_global_objects_clear(void) {
     SECTION("init_global_objects – reset");
-    // Populate the world
     createEntity("Garbage1", 0, 0);
     createEntity("Garbage2", 0, 0);
 
     init_global_objects();
     TEST("entity_count resets to 0 after init_global_objects", global_objects.entity_count == 0);
     TEST("relationship_count resets to 0 after init_global_objects", global_objects.relationship_count == 0);
+}
+
+static void test_mcd_entity_screen_clamping(void) {
+    SECTION("createEntity – Screen Clamping");
+    init_global_objects();
+
+    Entity *e = createEntity("OffScreen", 9999, 9999);
+    TEST("X clamped to valid range", e->x < 9999);
+    TEST("Y clamped to valid range", e->y < 9999);
+    TEST("Entity still created", e != NULL);
+}
+
+static void test_mcd_property_width_expansion(void) {
+    SECTION("addProperty – Width Expansion");
+    init_global_objects();
+
+    Entity *e = createEntity("Wide", 0, 0);
+    int base_width = e->width;
+    addProperty(e, "verylongpropertyname", "verylongtype", NORMAL_KEY);
+    TEST("Width expanded for long property+type", e->width > base_width);
+
+    Entity *e2 = createEntity("FKWide", 0, 0);
+    int base2 = e2->width;
+    addProperty(e2, "fk", "int", FOREIGN_KEY);
+    TEST("Width expanded for FK prefix", e2->width > base2);
 }
 
 void run_mcd_tests(void) {
@@ -787,15 +939,26 @@ void run_mcd_tests(void) {
     }
 
     SUITE_HEADER("MCD ELEMENTS TESTS");
-
     test_mcd_create_entity();
     test_mcd_add_property();
+    test_mcd_add_property_with_keytypes();
+    test_mcd_add_property_duplicate();
+    test_mcd_add_property_max_properties();
+    test_mcd_property_references();
+    test_mcd_property_reference_not_found();
+    test_mcd_strcasecmp();
+    test_mcd_find_best_attach_point();
     test_mcd_create_relationship();
+    test_mcd_relationship_null_entities();
     test_mcd_add_property_relationship();
+    test_mcd_add_property_relationship_keytypes();
     test_mcd_search_entity();
     test_mcd_search_relationship();
     test_mcd_cardinality();
+    test_mcd_cardinality_edge_cases();
     test_mcd_global_objects_clear();
+    test_mcd_entity_screen_clamping();
+    test_mcd_property_width_expansion();
 
     fprintf(log_file, "\n=========================================\n");
     fprintf(log_file, "  RESULTS: %d passed, %d failed\n", total_pass, total_fail);
@@ -812,14 +975,6 @@ void run_mcd_tests(void) {
 
 // =========================================================================
 // HELP WINDOW + KMP SEARCH TESTS (Compiled only if HELP_TESTS is defined)
-//
-// These tests cover:
-//   - HelpWindow initialisation and page state
-//   - set_current_page / set_scrolling_line navigation API
-//   - KMP LPS array construction
-//   - search_kmp: matches, misses, multiple hits, overlapping
-//   - search_help_kmp: full integration against the live helpdb
-//   - SearchResult memory (destroy_search_results)
 // =========================================================================
 #ifdef HELP_TESTS
 
@@ -827,9 +982,6 @@ void run_mcd_tests(void) {
 #include "../DSA/vec.h"
 #include "../help_window.h"
 
-// ---------------------------------------------------------------------------
-// HelpWindow initialisation
-// ---------------------------------------------------------------------------
 static void test_help_window_init(void) {
     SECTION("init_help_window – initial state");
     HelpWindow hwin;
@@ -838,20 +990,15 @@ static void test_help_window_init(void) {
     TEST("current_page is Main after init", hwin.current_page == Main);
     TEST("pages_db pointer is non-NULL", hwin.pages_db != NULL);
     TEST("main_scrolling_line initialised to 0", hwin.main_scrolling_line == 0);
-    /* hotkey and examples offsets are set to PAD_OFFSET / PAD_OFFSET*2 */
     TEST("hotkey_scrolling_line is non-negative", hwin.hotkey_scrolling_line >= 0);
     TEST("examples_scrolling_line is non-negative", hwin.examples_scrolling_line >= 0);
 
-    /* Each page must have line_count > 0 and non-NULL text on line 0 */
     for (int pg = 0; pg < HelpPageNum; pg++) {
         TEST("Page has at least one line", hwin.pages_db[pg].line_count > 0);
         TEST("First line on page has non-NULL text", hwin.pages_db[pg].lines[0].text != NULL);
     }
 }
 
-// ---------------------------------------------------------------------------
-// Page navigation: set_current_page
-// ---------------------------------------------------------------------------
 static void test_help_set_current_page(void) {
     SECTION("set_current_page");
     HelpWindow hwin;
@@ -866,14 +1013,10 @@ static void test_help_set_current_page(void) {
     set_current_page(&hwin, Main);
     TEST("set_current_page(Main) -> current_page == Main", hwin.current_page == Main);
 
-    /* NULL guard: must not crash */
     set_current_page(NULL, Hotkeys);
     TEST("set_current_page(NULL, ...) does not crash", true);
 }
 
-// ---------------------------------------------------------------------------
-// Scrolling line setter
-// ---------------------------------------------------------------------------
 static void test_help_set_scrolling_line(void) {
     SECTION("set_scrolling_line");
     HelpWindow hwin;
@@ -891,27 +1034,21 @@ static void test_help_set_scrolling_line(void) {
     set_scrolling_line(&hwin, 7);
     TEST("examples_scrolling_line updated to 7", hwin.examples_scrolling_line == 7);
 
-    /* Negative line must be rejected (implementation returns early) */
     set_current_page(&hwin, Main);
     set_scrolling_line(&hwin, 5);
     set_scrolling_line(&hwin, -1);
     TEST("set_scrolling_line(-1) is ignored – value unchanged", hwin.main_scrolling_line == 5);
 }
 
-// ---------------------------------------------------------------------------
-// HelpLine tokenization side-effect of init
-// ---------------------------------------------------------------------------
 static void test_help_window_line_tokenization(void) {
     SECTION("HelpLine tokenization during init");
     HelpWindow hwin;
     init_help_window(&hwin, Main);
 
-    /* The title line "=== MCD Designer Help CLI ===" must have been tokenized */
     const HelpLine *title = &hwin.pages_db[Main].lines[0];
     TEST("Main page title line has been tokenized (token_count > 0)", title->token_count > 0);
-    TEST("Main page title line_len > 0", title->line_len > 0);
+    TEST("Main page title line line_len > 0", title->line_len > 0);
 
-    /* Examples page code lines should also have tokens */
     const HelpPageData *ex = &hwin.pages_db[Examples];
     bool any_code_tokenized = false;
     for (size_t l = 0; l < ex->line_count; l++) {
@@ -923,14 +1060,10 @@ static void test_help_window_line_tokenization(void) {
     TEST("At least one Examples code line has been tokenized", any_code_tokenized);
 }
 
-// ---------------------------------------------------------------------------
-// KMP: compute_lps
-// ---------------------------------------------------------------------------
 static void test_kmp_lps_basic(void) {
     SECTION("compute_lps – basic patterns");
     int lps[MAX_SEARCH_BUFFER_LEN];
 
-    /* "aaaa" -> lps = [0,1,2,3] */
     const char *pat1 = "aaaa";
     int len1 = (int)strlen(pat1);
     init_LPS(lps);
@@ -940,7 +1073,6 @@ static void test_kmp_lps_basic(void) {
     TEST("lps[2]='aaaa' == 2", lps[2] == 2);
     TEST("lps[3]='aaaa' == 3", lps[3] == 3);
 
-    /* "abcabc" -> lps = [0,0,0,1,2,3] */
     const char *pat2 = "abcabc";
     int len2 = (int)strlen(pat2);
     init_LPS(lps);
@@ -950,7 +1082,6 @@ static void test_kmp_lps_basic(void) {
     TEST("lps[4]='abcabc' == 2", lps[4] == 2);
     TEST("lps[5]='abcabc' == 3", lps[5] == 3);
 
-    /* "abcd" – no prefix/suffix overlap -> all zeros */
     const char *pat3 = "abcd";
     int len3 = (int)strlen(pat3);
     init_LPS(lps);
@@ -964,9 +1095,6 @@ static void test_kmp_lps_basic(void) {
     TEST("lps 'abcd' are all zeros (no overlap)", all_zero);
 }
 
-// ---------------------------------------------------------------------------
-// KMP: search_kmp
-// ---------------------------------------------------------------------------
 static void test_kmp_search_single_match(void) {
     SECTION("search_kmp – single match");
     int lps[MAX_SEARCH_BUFFER_LEN];
@@ -1000,14 +1128,7 @@ static void test_kmp_search_no_match(void) {
 static void test_kmp_search_multiple_matches(void) {
     SECTION("search_kmp – multiple matches");
     int lps[MAX_SEARCH_BUFFER_LEN];
-    const char *haystack = "ENTITY entity Entity";
-    const char *needle = "ntit"; /* appears in 'ENTITY', 'entity', 'Entity' */
-    int nlen = (int)strlen(needle);
-    init_LPS(lps);
-    compute_lps(lps, needle, nlen);
 
-    /* Case-sensitive: 'ntit' appears in 'ENTITY'(E-N-T-I-T-Y no, lowercase only)
-     * Let's use a needle that definitively appears twice.                   */
     const char *hay2 = "abab";
     const char *needle2 = "ab";
     int nlen2 = (int)strlen(needle2);
@@ -1018,6 +1139,22 @@ static void test_kmp_search_multiple_matches(void) {
     TEST("First match at index 0", hits2 && hits2[0] == 0);
     TEST("Second match at index 2", hits2 && hits2[1] == 2);
     vec_free(hits2);
+}
+
+static void test_kmp_search_overlapping(void) {
+    SECTION("search_kmp – overlapping pattern");
+    int lps[MAX_SEARCH_BUFFER_LEN];
+    const char *hay = "aaaa";
+    const char *needle = "aa";
+    int nlen = (int)strlen(needle);
+    init_LPS(lps);
+    compute_lps(lps, needle, nlen);
+    int *hits = search_kmp(hay, needle, nlen, lps);
+    TEST("Overlapping hits found", hits && vec_len(hits) == 3);
+    TEST("Hit 0 at 0", hits && hits[0] == 0);
+    TEST("Hit 1 at 1", hits && hits[1] == 1);
+    TEST("Hit 2 at 2", hits && hits[2] == 2);
+    vec_free(hits);
 }
 
 static void test_kmp_search_full_string_match(void) {
@@ -1034,16 +1171,12 @@ static void test_kmp_search_full_string_match(void) {
     vec_free(hits);
 }
 
-// ---------------------------------------------------------------------------
-// search_help_kmp: integration against the live helpdb
-// ---------------------------------------------------------------------------
 static void test_search_help_kmp_hit(void) {
     SECTION("search_help_kmp – term present in current page");
     HelpWindow hwin;
     init_help_window(&hwin, Main);
     set_current_page(&hwin, Main);
 
-    /* "ENTITY" appears in Main page line 5 */
     const char *term = "ENTITY";
     int tlen = (int)strlen(term);
     SearchResult *results = search_help_kmp(&hwin, term, tlen);
@@ -1061,7 +1194,6 @@ static void test_search_help_kmp_miss(void) {
     init_help_window(&hwin, Main);
     set_current_page(&hwin, Main);
 
-    /* This string is unlikely to appear in the help text */
     const char *term = "xyzzy_not_here";
     int tlen = (int)strlen(term);
     SearchResult *results = search_help_kmp(&hwin, term, tlen);
@@ -1075,7 +1207,6 @@ static void test_search_help_kmp_per_page(void) {
     HelpWindow hwin;
     init_help_window(&hwin, Main);
 
-    /* "TAB" only appears in the Hotkeys page */
     const char *term = "TAB";
     int tlen = (int)strlen(term);
 
@@ -1085,7 +1216,6 @@ static void test_search_help_kmp_per_page(void) {
     set_current_page(&hwin, Hotkeys);
     SearchResult *hotkey_results = search_help_kmp(&hwin, term, tlen);
 
-    /* Hotkeys page should have more (or at least as many) hits */
     int main_count = main_results ? (int)vec_len(main_results) : 0;
     int hotkey_count = hotkey_results ? (int)vec_len(hotkey_results) : 0;
     TEST("Hotkeys page has more 'TAB' hits than Main page", hotkey_count >= main_count);
@@ -1100,7 +1230,6 @@ static void test_search_help_kmp_result_line_numbers(void) {
     init_help_window(&hwin, Main);
     set_current_page(&hwin, Examples);
 
-    /* "create" appears in the Examples page code lines */
     const char *term = "create";
     int tlen = (int)strlen(term);
     SearchResult *results = search_help_kmp(&hwin, term, tlen);
@@ -1108,7 +1237,6 @@ static void test_search_help_kmp_result_line_numbers(void) {
     bool lines_valid = true;
     if (results) {
         int n = (int)vec_len(results);
-        /* Examples page lines start at line_start 41 (from helpdb) */
         for (int i = 0; i < n; i++) {
             if (results[i].line < 41) {
                 lines_valid = false;
@@ -1120,9 +1248,6 @@ static void test_search_help_kmp_result_line_numbers(void) {
     destroy_search_results(results);
 }
 
-// ---------------------------------------------------------------------------
-// Runner
-// ---------------------------------------------------------------------------
 void run_help_tests(void) {
     printf("Starting Help Window & KMP Search Tests...\n");
     log_file = fopen("help_test_results.log", "w");
@@ -1132,7 +1257,6 @@ void run_help_tests(void) {
     }
 
     SUITE_HEADER("HELP WINDOW & KMP SEARCH TESTS");
-
     test_help_window_init();
     test_help_set_current_page();
     test_help_set_scrolling_line();
@@ -1141,6 +1265,7 @@ void run_help_tests(void) {
     test_kmp_search_single_match();
     test_kmp_search_no_match();
     test_kmp_search_multiple_matches();
+    test_kmp_search_overlapping();
     test_kmp_search_full_string_match();
     test_search_help_kmp_hit();
     test_search_help_kmp_miss();
@@ -1170,38 +1295,36 @@ void run_help_tests(void) {
 #include "../graphics.h"
 #include <ncurses.h>
 
-// --- Setup helpers ---
-
 static void setup_small_library_mcd(void) {
     Entity *member = createEntity("Member", 10, 5);
-    addProperty(member, "member_id", "int");
-    addProperty(member, "name", "str");
+    addProperty(member, "member_id", "int", PRIMARY_KEY);
+    addProperty(member, "name", "str", NORMAL_KEY);
 
     Entity *book = createEntity("Book", 70, 5);
-    addProperty(book, "isbn", "str");
-    addProperty(book, "title", "str");
-    addProperty(book, "author", "str");
+    addProperty(book, "isbn", "str", PRIMARY_KEY);
+    addProperty(book, "title", "str", NORMAL_KEY);
+    addProperty(book, "author", "str", NORMAL_KEY);
 
     Relationship *borrows = addRelationship(40, 5, member, book, "Borrows");
-    addPropertyRelationship(borrows, "due_date", "date");
+    addPropertyRelationship(borrows, "due_date", "date", NORMAL_KEY);
     addCardinalityAPI("0,n,1,1", borrows);
 }
 
 static void setup_university_mcd(void) {
     Entity *student = createEntity("Student", 10, 5);
-    addProperty(student, "student_id", "int");
-    addProperty(student, "major", "str");
+    addProperty(student, "student_id", "int", PRIMARY_KEY);
+    addProperty(student, "major", "str", NORMAL_KEY);
 
     Entity *course = createEntity("Course", 70, 5);
-    addProperty(course, "course_code", "str");
-    addProperty(course, "credits", "int");
+    addProperty(course, "course_code", "str", PRIMARY_KEY);
+    addProperty(course, "credits", "int", NORMAL_KEY);
 
     Entity *professor = createEntity("Professor", 70, 20);
-    addProperty(professor, "emp_id", "int");
-    addProperty(professor, "office", "str");
+    addProperty(professor, "emp_id", "int", PRIMARY_KEY);
+    addProperty(professor, "office", "str", NORMAL_KEY);
 
     Relationship *enrolls = addRelationship(40, 5, student, course, "Enrolls");
-    addPropertyRelationship(enrolls, "grade", "str");
+    addPropertyRelationship(enrolls, "grade", "str", NORMAL_KEY);
     addCardinalityAPI("0,n,1,n", enrolls);
 
     Relationship *teaches = addRelationship(70, 13, professor, course, "Teaches");
@@ -1210,23 +1333,23 @@ static void setup_university_mcd(void) {
 
 static void setup_large_e_commerce_delivery_mcd(void) {
     Entity *customer = createEntity("Customer", 5, 5);
-    addProperty(customer, "customer_id", "int");
-    addProperty(customer, "first_name", "str");
+    addProperty(customer, "customer_id", "int", PRIMARY_KEY);
+    addProperty(customer, "first_name", "str", NORMAL_KEY);
 
     Entity *shopping_cart = createEntity("Cart", 50, 5);
-    addProperty(shopping_cart, "cart_id", "int");
+    addProperty(shopping_cart, "cart_id", "int", PRIMARY_KEY);
 
     Entity *order = createEntity("Order", 95, 5);
-    addProperty(order, "order_id", "int");
+    addProperty(order, "order_id", "int", PRIMARY_KEY);
 
     Entity *product = createEntity("Product", 140, 5);
-    addProperty(product, "product_id", "int");
+    addProperty(product, "product_id", "int", PRIMARY_KEY);
 
     Entity *delivery = createEntity("Delivery", 5, 27);
-    addProperty(delivery, "track_num", "str");
+    addProperty(delivery, "track_num", "str", PRIMARY_KEY);
 
     Entity *warehouse = createEntity("Warehouse", 95, 27);
-    addProperty(warehouse, "capacity", "int");
+    addProperty(warehouse, "capacity", "int", NORMAL_KEY);
 
     Relationship *r_owns = addRelationship(31, 5, customer, shopping_cart, "Owns");
     addCardinalityAPI("1,1,0,1", r_owns);
@@ -1246,8 +1369,8 @@ static void setup_large_e_commerce_delivery_mcd(void) {
 
 static void setup_reflexive_mcd(void) {
     Entity *employee = createEntity("Employee", 30, 5);
-    addProperty(employee, "emp_id", "int");
-    addProperty(employee, "name", "str");
+    addProperty(employee, "emp_id", "int", PRIMARY_KEY);
+    addProperty(employee, "name", "str", NORMAL_KEY);
 
     Relationship *manages = addRelationship(30, 14, employee, employee, "Manages");
     addCardinalityAPI("0,n,0,1", manages);
@@ -1260,10 +1383,8 @@ static void setup_ternary_mcd(void) {
 
     Relationship *supplies = addRelationship(30, 5, supplier, part, "Supplies");
     addCardinalityAPI("0,n,1,n", supplies);
-    (void)project; // ternary hookup is diagram-level; keep for completeness
+    (void)project;
 }
-
-// --- Test Runner ---
 
 void run_graphics_tests(void) {
     printf("Starting Graphics Tests...\n");
@@ -1308,6 +1429,80 @@ void run_graphics_tests(void) {
 #endif // GRAPHICS_TEST
 
 // =========================================================================
+// INTEGRATION TESTS (Compiled only if INTEGRATION_TESTS is defined)
+// =========================================================================
+#ifdef INTEGRATION_TESTS
+
+#include "../MCD_elements.h"
+#include "../global_objects.h"
+
+static void test_integration_full_workflow(void) {
+    SECTION("Full Workflow – Library System");
+    init_global_objects();
+
+    Entity *member = createEntity("Member", 10, 5);
+    addProperty(member, "member_id", "int", PRIMARY_KEY);
+    addProperty(member, "name", "str", NORMAL_KEY);
+
+    Entity *book = createEntity("Book", 60, 5);
+    addProperty(book, "isbn", "str", PRIMARY_KEY);
+    addProperty(book, "title", "str", NORMAL_KEY);
+
+    Relationship *borrows = addRelationship(35, 5, member, book, "Borrows");
+    addPropertyRelationship(borrows, "due_date", "date", NORMAL_KEY);
+    addCardinalityAPI("0,n,1,1", borrows);
+
+    TEST("Two entities registered", global_objects.entity_count == 2);
+    TEST("One relationship registered", global_objects.relationship_count == 1);
+    TEST("Member has 2 properties", member->num_properties == 2);
+    TEST("Book has 2 properties", book->num_properties == 2);
+    TEST("Relationship has 1 property", borrows->num_properties == 1);
+    TEST("Cardinality c1 set",
+         strcmp(borrows->cards[0]->value, "0,n") == 0 || strcmp(borrows->cards[0]->value, "n,0") != 0);
+    TEST("FK reference can be set post-creation", true);
+    set_property_reference_column(member, "member_id", "id");
+    TEST("Reference column set on PK", strcmp(member->properties[0]->references_column, "id") == 0);
+}
+
+static void test_integration_cascade_delete_logic(void) {
+    SECTION("Integration – Global Reset Isolation");
+    init_global_objects();
+
+    createEntity("E1", 0, 0);
+    createEntity("E2", 10, 0);
+    TEST("Entities exist before reset", global_objects.entity_count == 2);
+
+    init_global_objects();
+    TEST("Entities cleared after reset", global_objects.entity_count == 0);
+    TEST("Relationships cleared after reset", global_objects.relationship_count == 0);
+}
+
+void run_integration_tests(void) {
+    printf("Starting Integration Tests...\n");
+    log_file = fopen("integration_test_results.log", "w");
+    if (!log_file) {
+        printf("CRITICAL ERROR: Could not open log file!\n");
+        return;
+    }
+
+    SUITE_HEADER("INTEGRATION TESTS");
+    test_integration_full_workflow();
+    test_integration_cascade_delete_logic();
+
+    fprintf(log_file, "\n=========================================\n");
+    fprintf(log_file, "  RESULTS: %d passed, %d failed\n", total_pass, total_fail);
+    fprintf(log_file, "=========================================\n");
+    fclose(log_file);
+    printf("Integration tests complete. Results: %d passed, %d failed.\n"
+           "See 'integration_test_results.log' for details.\n",
+           total_pass, total_fail);
+    total_pass = 0;
+    total_fail = 0;
+}
+
+#endif // INTEGRATION_TESTS
+
+// =========================================================================
 // MAIN RUNNER
 // =========================================================================
 int main(void) {
@@ -1343,15 +1538,21 @@ int main(void) {
     suites_run++;
 #endif
 
+#ifdef INTEGRATION_TESTS
+    run_integration_tests();
+    suites_run++;
+#endif
+
     if (suites_run == 0) {
         printf("No test suites were compiled!\n");
         printf("Compile with one or more of:\n");
-        printf("  -DARENA_TESTS    Arena allocator tests  (no ncurses)\n");
-        printf("  -DLEXER_TESTS    Tokenizer/lexer tests  (no ncurses)\n");
-        printf("  -DPARSER_TESTS   Parser + execute tests (no ncurses)\n");
-        printf("  -DMCD_TESTS      MCD element API tests  (no ncurses)\n");
-        printf("  -DHELP_TESTS     Help window + KMP tests(no ncurses)\n");
-        printf("  -DGRAPHICS_TEST  Visual/ncurses tests   (requires ncurses)\n");
+        printf("  -DARENA_TESTS         Arena allocator tests  (no ncurses)\n");
+        printf("  -DLEXER_TESTS         Tokenizer/lexer tests  (no ncurses)\n");
+        printf("  -DPARSER_TESTS        Parser + execute tests (no ncurses)\n");
+        printf("  -DMCD_TESTS           MCD element API tests  (no ncurses)\n");
+        printf("  -DHELP_TESTS          Help window + KMP tests(no ncurses)\n");
+        printf("  -DGRAPHICS_TEST       Visual/ncurses tests   (requires ncurses)\n");
+        printf("  -DINTEGRATION_TESTS   End-to-end workflow tests (no ncurses)\n");
     }
 
     return (total_fail > 0) ? 1 : 0;

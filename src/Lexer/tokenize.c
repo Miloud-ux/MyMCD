@@ -1,7 +1,16 @@
+// == tokenize.c ==
+//
 // == CHANGES : ==
 // - tokenize_content(): added "change" -> TOKEN_CHANGE and "name" ->
 //   TOKEN_NAME branches to the keyword-matching if/else chain, right
 //   after the "clear" branch.
+// - tokenize_content(): added "save" -> TOKEN_SAVE branch (right after
+//   TOKEN_NAME) so the new save command is recognised as a keyword
+//   rather than falling through to TOKEN_IDENTIFIER.
+// - tokenize_content(): added "MCD" -> TOKEN_MCD branch (right after
+//   the "MLD" branch) so the diagram-type argument of "save MCD …"
+//   is tokenised correctly.  Previously "MCD" was an identifier; now
+//   it has its own token type mirroring TOKEN_MLD.
 #include "tokenize.h"
 #include <ctype.h>
 #include <string.h>
@@ -77,6 +86,8 @@ void tokenize_content(const char *content, Token tokens[], int *count) {
                 tokens[*count].type = TOKEN_CHANGE;
             } else if (strcmp(tokens[*count].value, "name") == 0) {
                 tokens[*count].type = TOKEN_NAME;
+            } else if (strcmp(tokens[*count].value, "save") == 0) {
+                tokens[*count].type = TOKEN_SAVE;
             } else if (strcmp(tokens[*count].value, "money") == 0) {
                 tokens[*count].type = TOKEN_MONEY_TYPE;
             } else if (strcmp(tokens[*count].value, "int") == 0) {
@@ -85,6 +96,8 @@ void tokenize_content(const char *content, Token tokens[], int *count) {
                 tokens[*count].type = TOKEN_CONVERT;
             } else if (strcmp(tokens[*count].value, "MLD") == 0) {
                 tokens[*count].type = TOKEN_MLD;
+            } else if (strcmp(tokens[*count].value, "MCD") == 0) {
+                tokens[*count].type = TOKEN_MCD;
             } else if (strcmp(tokens[*count].value, "SQL") == 0) {
                 tokens[*count].type = TOKEN_SQL;
             } else if (strcmp(tokens[*count].value, "pk") == 0) {

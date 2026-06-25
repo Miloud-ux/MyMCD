@@ -4,6 +4,8 @@
 #include "graphics.h"
 #include "help_window.h"
 #include "utils/arena_allocator.h"
+#include "utils/menu.h"
+#include "utils/save.h"
 #include <ncurses.h>
 #include <string.h>
 
@@ -71,14 +73,87 @@ int main() {
     bool is_running = true;
     bool needs_redraw = false;
 
-    // Drawing
-    setup_large_e_commerce_delivery_mcd();
-    draw_all_and_refresh(screen_width, &moving, &needs_redraw);
-    draw_console_prompt(console_win, input_buffer, status);
+    // === Startup menu ========================================================
+    // show_startup_menu() blocks until the user picks an option.  It uses its
+    // own temporary window and cleans up before returning, so the persistent
+    // windows below are unaffected.
+    MenuChoice startup_choice = show_startup_menu();
+    if (startup_choice == MENU_EXIT) {
+        delwin(console_win);
+        delwin(help_win);
+        delwin(debug_window);
+        delwin(scrolling_pad);
+        endwin();
+        return 0;
+    }
+
+    // Arena and AST must exist before load_diagram() is called.
     Arena a;
     arena_init(&a, 1024 * 1024);
     AST tree;
     init_AST(&tree);
+
+    if (startup_choice == MENU_NEW) {
+        // Load the built-in test diagram (original behaviour)
+        setup_large_e_commerce_delivery_mcd();
+    } else {
+        // MENU_LOAD: prompt for filename, then replay commands from the file.
+        // Draw a simple centred prompt directly on stdscr.
+        char load_filename[256] = "";
+        int load_len = 0;
+
+        int sh, sw;
+        getmaxyx(stdscr, sh, sw);
+        int box_h = 5, box_w = 54;
+        int box_y = (sh - box_h) / 2;
+        int box_x = (sw - box_w) / 2;
+        if (box_y < 0)
+            box_y = 0;
+        if (box_x < 0)
+            box_x = 0;
+
+        // Draw a simple box + prompt
+        WINDOW *load_win = newwin(box_h, box_w, box_y, box_x);
+        keypad(load_win, TRUE);
+        box(load_win, 0, 0);
+        wattron(load_win, A_BOLD | COLOR_PAIR(2));
+        mvwprintw(load_win, 1, 2, "Load Diagram");
+        wattroff(load_win, A_BOLD | COLOR_PAIR(2));
+        mvwprintw(load_win, 2, 2, "Filename: ");
+        wrefresh(load_win);
+        echo();
+        curs_set(1);
+        // Read filename using wgetnstr for simplicity; it echoes in-window
+        mvwgetnstr(load_win, 2, 12, load_filename, 253);
+        noecho();
+        curs_set(0);
+        delwin(load_win);
+        clear();
+        refresh();
+
+        load_len = (int)strlen(load_filename);
+        // Trim trailing whitespace / newlines just in case
+        while (load_len > 0 && (load_filename[load_len - 1] == '\n' || load_filename[load_len - 1] == '\r' ||
+                                load_filename[load_len - 1] == ' ')) {
+            load_filename[--load_len] = '\0';
+        }
+
+        if (load_len > 0) {
+            load_diagram(load_filename, &a, &tree, console_win, &needs_redraw);
+
+            // debug
+            // for (int i = 0; i < global_objects.entity_count; i++) {
+            //     if (global_objects.entities[i])
+            //         mvprintw(i + 1, 0, "ENTITY %d: %s", i, global_objects.entities[i]->name);
+            // }
+            // refresh();
+            // getch();
+        }
+    }
+
+    // Drawing
+    draw_all_and_refresh(screen_width, &moving, &needs_redraw);
+    draw_console_prompt(console_win, input_buffer, status);
 
     while (is_running) {
 
@@ -431,37 +506,65 @@ int main() {
 }
 
 static void setup_large_e_commerce_delivery_mcd(void) {
+    // ==========================================
+    // 1. ENTITIES & PROPERTIES
+    // (All names strictly < 15 characters)
+    // ==========================================
+
     Entity *customer = createEntity("Customer", 5, 5);
-    addProperty(customer, "customer_id", "int", PRIMARY_KEY);
-    addProperty(customer, "first_name", "str", NORMAL_KEY);
+    addProperty(customer, "cust_id", "int", PRIMARY_KEY);
+    addProperty(customer, "email", "str", NORMAL_KEY);
 
-    Entity *shopping_cart = createEntity("Cart", 50, 5);
-    addProperty(shopping_cart, "cart_id", "int", PRIMARY_KEY);
+    Entity *profile = createEntity("Profile", 50, 5);
+    addProperty(profile, "prof_id", "int", PRIMARY_KEY);
+    addProperty(profile, "bio", "str", NORMAL_KEY);
 
-    Entity *order = createEntity("Order", 95, 5);
+    Entity *category = createEntity("Category", 5, 30);
+    addProperty(category, "cat_id", "int", PRIMARY_KEY);
+    addProperty(category, "cat_name", "str", NORMAL_KEY);
+
+    Entity *order = createEntity("Orders", 50, 30);
     addProperty(order, "order_id", "int", PRIMARY_KEY);
+    addProperty(order, "ord_date", "date", NORMAL_KEY);
 
-    Entity *product = createEntity("Product", 140, 5);
-    addProperty(product, "product_id", "int", PRIMARY_KEY);
+    Entity *product = createEntity("Product", 95, 30);
+    addProperty(product, "prod_id", "int", PRIMARY_KEY);
+    addProperty(product, "price", "double", NORMAL_KEY);
 
-    Entity *delivery = createEntity("Delivery", 5, 27);
-    addProperty(delivery, "track_num", "str", PRIMARY_KEY);
-
-    Entity *warehouse = createEntity("Warehouse", 95, 27);
+    Entity *warehouse = createEntity("Warehouse", 140, 30);
+    addProperty(warehouse, "wh_id", "int", PRIMARY_KEY);
     addProperty(warehouse, "capacity", "int", NORMAL_KEY);
 
-    Relationship *r_owns = addRelationship(31, 5, customer, shopping_cart, "Owns");
-    addCardinalityAPI("1,1,0,1", r_owns);
+    // ==========================================
+    // 2. RELATIONSHIPS & CARDINALITIES
+    // ==========================================
 
-    Relationship *r_checkout = addRelationship(76, 5, shopping_cart, order, "Checkout");
-    addCardinalityAPI("0,1,1,1", r_checkout);
+    // Case A: 1:1 Relationship (Optional on Customer, Mandatory on Profile)
+    // MLD EXPECTATION: Profile table gets 'cust_id' as a FOREIGN_KEY (Unique).
+    Relationship *r_has_prof = addRelationship(27, 5, customer, profile, "HasProf");
+    addCardinalityAPI("0,1,1,1", r_has_prof);
 
-    Relationship *r_order_line = addRelationship(121, 5, order, product, "Ord_Line");
-    addCardinalityAPI("1,n,0,n", r_order_line);
+    // Case B: 1:N Relationship (Customer places many Orders)
+    // MLD EXPECTATION: Orders table gets 'cust_id' as a FOREIGN_KEY.
+    Relationship *r_places = addRelationship(27, 17, customer, order, "Places");
+    addCardinalityAPI("0,n,1,1", r_places);
 
-    Relationship *r_fulfilled = addRelationship(25, 16, order, delivery, "ShipsVia");
-    addCardinalityAPI("0,1,1,1", r_fulfilled);
+    // Case C: Unary / Reflexive Relationship (Category hierarchy)
+    // MLD EXPECTATION: Category gets its own PK as a FOREIGN_KEY (e.g., parent_id).
+    // This will severely test your `migrate_foreign_key()` and `references` logic.
+    Relationship *r_subcat = addRelationship(5, 50, category, category, "SubCat");
+    addCardinalityAPI("0,1,0,n", r_subcat);
 
-    Relationship *r_stocks = addRelationship(121, 16, warehouse, product, "Stocks");
-    addCardinalityAPI("1,n,0,n", r_stocks);
+    // Case D: N:M Relationship with an Attribute (Order Line)
+    // MLD EXPECTATION: A junction table "Contains" is created.
+    // It gets 'order_id' and 'prod_id' as FKs (forming a composite PK),
+    // AND it must include the 'qty' property as a NORMAL_KEY.
+    Relationship *r_contains = addRelationship(72, 30, order, product, "Contains");
+    addCardinalityAPI("1,n,0,n", r_contains);
+    addPropertyRelationship(r_contains, "qty", "int", NORMAL_KEY);
+
+    // Case E: Standard N:M Relationship (Warehouse Stocks)
+    // MLD EXPECTATION: A junction table "Stocks" is created with two FKs.
+    Relationship *r_stocks = addRelationship(117, 30, warehouse, product, "Stocks");
+    addCardinalityAPI("0,n,0,n", r_stocks);
 }

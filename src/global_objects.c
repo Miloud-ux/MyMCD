@@ -55,3 +55,24 @@ void unregister_relationship(Relationship *r) {
         }
     }
 }
+
+void unregister_entity(Entity *e) {
+    if (!e) {
+        return;
+    }
+
+    for (int i = 0; i < global_objects.entity_count; i++) {
+        Entity *curr = global_objects.entities[i];
+        if (curr == e) {
+            for (int j = 0; j < e->num_properties; j++) {
+                if (e->properties[i]) {
+                    free(e->properties[i]);
+                }
+            }
+
+            free(e);
+            global_objects.entities[i] = NULL;
+            return;
+        }
+    }
+}

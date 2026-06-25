@@ -49,6 +49,21 @@ bool parse_change_name(Parser *p, WINDOW *console, ChangeNameCommand *c);
 bool parse_change_name_value(Parser *p, WINDOW *console, ChangeNameCommand *c);
 bool execute_changeName(ChangeNameCommand c, WINDOW *console_win);
 
+// Delete command
+// Parses:  delete "name"
+// Fills:   DeleteCommand.name
+bool parse_delete(Parser *p, WINDOW *console, DeleteCommand *c);
+// Looks up the name as an entity, then a relationship, and removes it
+// (deleting an entity also removes any relationship still attached to it)
+bool execute_delete(DeleteCommand c, WINDOW *console_win);
+
+// Save command
+// Parses:  save MCD|MLD "filename"
+// Fills:   SaveCommand.diagram_type and SaveCommand.filename
+bool parse_save(Parser *p, WINDOW *console, SaveCommand *c);
+// Delegates to save_diagram() in utils/save.c
+bool execute_save(SaveCommand c, WINDOW *console_win);
+
 // clear command
 void parse_clear();
 

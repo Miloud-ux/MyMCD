@@ -1,5 +1,7 @@
 #include "parse.h"
 #include "../global_objects.h"
+#include "../utils/save.h"
+#include "../utils/sql.h"
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
@@ -239,11 +241,8 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
                         cmd->cmds.convert_command = c;
                         add_ast_node(a, tree, cmd);
                     }
-                } else if (c.type == SQL) {
-                    // convert_to_sql();
                 }
             }
-
         } else if (t.type == TOKEN_CHANGE) {
             ChangeNameCommand c = {0};
             advance_token(&p->current);
@@ -262,10 +261,44 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
             } else {
                 return false;
             }
-
+        } else if (t.type == TOKEN_DELETE) {
+            DeleteCommand c = {0};
+            advance_token(&p->current);
+            if (parse_delete(p, console_win, &c)) {
+                if (execute_delete(c, console_win)) {
+                    Command *cmd = ARENA_PUSH_OBJECT(a, Command);
+                    cmd->type = DELETE;
+                    cmd->cmds.delete_command = c;
+                    add_ast_node(a, tree, cmd);
+                    show_msg(console_win, "Entity/relationship deleted succesfully", "UPDATE");
+                } else {
+                    error_msg_ex(console_win, p, ERR_RUNTIME, "Could not delete",
+                                 "no entity/relationship with that name");
+                    break;
+                }
+            } else {
+                return false;
+            }
         } else if (t.type == TOKEN_CLEAR) {
             advance_token(&p->current);
             parse_clear();
+        } else if (t.type == TOKEN_SAVE) {
+            SaveCommand c = {0};
+            advance_token(&p->current);
+            if (parse_save(p, console_win, &c)) {
+                if (execute_save(c, console_win)) {
+                    // Record in the AST so the debug window shows it
+                    Command *cmd = ARENA_PUSH_OBJECT(a, Command);
+                    cmd->type = SAVE;
+                    cmd->cmds.save_command = c;
+                    add_ast_node(a, tree, cmd);
+                } else {
+                    // execute_save / save_diagram already displayed the error
+                    break;
+                }
+            } else {
+                return false;
+            }
         } else if (t.type == TOKEN_EOF) {
             break;
         } else if (t.type == TOKEN_UNKNOWN) {
@@ -279,11 +312,13 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
 
             return false;
         } else {
-            const char *error = "Unknown command try : {create, help,clear}";
+            const char *error = "Unknown command try : {create, add, card, convert, change, save, delete, help, clear}";
             error_msg(console_win, p, error);
             return false;
         }
     }
+
+    return true;
 }
 
 bool parse_create(Parser *p, WINDOW *console, CreateCommand *c) {
@@ -393,26 +428,38 @@ bool parse_create_relationship(WINDOW *console, Parser *p, CreateCommand *c) {
 }
 
 bool execute_create(CreateCommand c) {
-    static int x = 10;
-    static int y = 10;
+#define GRID_COLS 4
+#define GRID_X_STEP (ENTITY_WIDTH + 4)
+#define GRID_Y_STEP (ENTITY_HEIGHT + 3)
+#define GRID_X_ORIGIN 2
+#define GRID_Y_ORIGIN 2
+    static int entity_count_placed = 0;
 
     if (c.type == TYPE_ENTITY) {
         if (!search_entity(c.Data.e.name)) {
+            int col = entity_count_placed % GRID_COLS;
+            int row = entity_count_placed / GRID_COLS;
+            int x = GRID_X_ORIGIN + col * GRID_X_STEP;
+            int y = GRID_Y_ORIGIN + row * GRID_Y_STEP;
             createEntity(c.Data.e.name, x, y);
-            x = y += 10;
+            entity_count_placed++;
             return true;
         }
     } else {
-        Entity *e1 = search_entity(c.Data.r.e1_name), *e2 = search_entity(c.Data.r.e2_name);
+        Entity *e1 = search_entity(c.Data.r.e1_name);
+        Entity *e2 = search_entity(c.Data.r.e2_name);
         if (!e1) {
-            e1 = createEntity(c.Data.r.e1_name, x, y);
-            x = y += 10;
+            int col = entity_count_placed % GRID_COLS;
+            int row = entity_count_placed / GRID_COLS;
+            e1 = createEntity(c.Data.r.e1_name, GRID_X_ORIGIN + col * GRID_X_STEP, GRID_Y_ORIGIN + row * GRID_Y_STEP);
+            entity_count_placed++;
         }
         if (!e2) {
-            e2 = createEntity(c.Data.r.e2_name, x, y);
-            x = y += 10;
+            int col = entity_count_placed % GRID_COLS;
+            int row = entity_count_placed / GRID_COLS;
+            e2 = createEntity(c.Data.r.e2_name, GRID_X_ORIGIN + col * GRID_X_STEP, GRID_Y_ORIGIN + row * GRID_Y_STEP);
+            entity_count_placed++;
         }
-        // allocation failed
         if (!e1 || !e2)
             return false;
 
@@ -530,6 +577,7 @@ bool parse_add_property_key(Parser *p, WINDOW *console, AddCommand *c) {
             advance_token(&p->current);
             return true;
         }
+        break;
 
     case TOKEN_EOF: // no key provided treat is as a default property
         c->Data.p.type = NORMAL_KEY;
@@ -807,6 +855,53 @@ bool execute_changeName(ChangeNameCommand c, WINDOW *console_win) {
     }
     return true;
 }
+bool parse_delete(Parser *p, WINDOW *console, DeleteCommand *c) {
+    Token t = peek_token(p->tokens, p->current);
+    if (t.type == TOKEN_STRING) {
+        if (strlen(t.value) == 0) {
+            const char *error = "Empty entity/relationship name";
+            error_msg(console, p, error);
+            return false;
+        }
+        strncpy(c->name, t.value, MAX_NAME_LEN);
+        c->name[MAX_NAME_LEN - 1] = '\0';
+        advance_token(&p->current);
+        return true;
+    } else {
+        const char *error = "Expected the entity/relationship name to delete";
+        error_msg(console, p, error);
+    }
+    return false;
+}
+
+bool execute_delete(DeleteCommand c, WINDOW *console_win) {
+    Entity *e = search_entity(c.name);
+    if (e) {
+        int removed = 0;
+        for (int i = global_objects.relationship_count - 1; i >= 0; i--) {
+            Relationship *r = global_objects.relationships[i];
+            if (r && (r->e1 == e || r->e2 == e)) {
+                unregister_relationship(r);
+                removed++;
+            }
+        }
+        if (removed > 0) {
+            char msg[128];
+            snprintf(msg, sizeof(msg), "Also removed %d relationship(s) attached to \"%s\"", removed, e->name);
+            show_msg(console_win, msg, "INFO");
+        }
+        unregister_entity(e);
+        return true;
+    }
+
+    Relationship *r = search_relationship(c.name);
+    if (r) {
+        unregister_relationship(r);
+        return true;
+    }
+
+    return false;
+}
 
 bool parse_convert(Parser *p, WINDOW *win, ConvertCommand *c) {
     Token t = peek_token(p->tokens, p->current);
@@ -824,28 +919,71 @@ bool parse_convert(Parser *p, WINDOW *win, ConvertCommand *c) {
         advance_token(&p->current);
         return true;
     default:
-        const char *error = "Expected a valid conversion mode (MLD, SQL)";
+        const char *error =
+            "Expected a valid conversion mode (MLD) if you wish to convert to SQL use 'save SQL' command instead";
         error_msg(win, p, error);
         return false;
     }
 }
 
+static void build_unique_property_name(Entity *dst, const char *prop_name, const char *src_name, char *out,
+                                       size_t out_size) {
+    bool clash = false;
+    for (int i = 0; i < dst->num_properties; i++) {
+        if (dst->properties[i] && strcmp(dst->properties[i]->name, prop_name) == 0) {
+            clash = true;
+            break;
+        }
+    }
+
+    if (!clash) {
+        strncpy(out, prop_name, out_size - 1);
+        out[out_size - 1] = '\0';
+        return;
+    }
+
+    snprintf(out, out_size, "%s_%s", src_name, prop_name);
+}
+
 static void migrate_foreign_key(Entity *dst, Entity *src, Relationship *r) {
     for (int i = 0; i < src->num_properties; i++) {
         if (src->properties[i] && src->properties[i]->keytype == PRIMARY_KEY) {
-            addProperty(dst, src->properties[i]->name, src->properties[i]->type, FOREIGN_KEY);
+            char name[MAX_NAME_LEN];
+            // For self-referencing relationships (dst == src), use the relationship
+            // name to build a descriptive FK column (e.g. "SubCat_cat_id").
+            // Otherwise use the standard "SrcName_prop_name" pattern.
+            if (dst == src) {
+                char prefix[MAX_NAME_LEN];
+                char tmp[MAX_NAME_LEN * 2];
+                snprintf(tmp, sizeof(tmp), "%s_%s", r->name, src->properties[i]->name);
+                strncpy(prefix, tmp, MAX_NAME_LEN - 1);
+                prefix[MAX_NAME_LEN - 1] = '\0';
+                build_unique_property_name(dst, prefix, src->name, name, sizeof(name));
+            } else {
+                build_unique_property_name(dst, src->properties[i]->name, src->name, name, sizeof(name));
+            }
+            addProperty(dst, name, src->properties[i]->type, FOREIGN_KEY);
+            // references stores the SOURCE ENTITY name (for SQL REFERENCES clause)
+            set_property_reference(dst, name, src->name);
+            // references_column stores the ORIGINAL PK column name in the source entity
+            set_property_reference_column(dst, name, src->properties[i]->name);
         }
     }
     for (int i = 0; i < r->num_properties; i++) {
         if (r->properties[i]) {
-            addProperty(dst, r->properties[i]->name, r->properties[i]->type, r->properties[i]->keytype);
+            char name[MAX_NAME_LEN];
+            build_unique_property_name(dst, r->properties[i]->name, r->name, name, sizeof(name));
+            addProperty(dst, name, r->properties[i]->type, r->properties[i]->keytype);
         }
     }
 }
 
 static bool create_junction_entity(Relationship *r, Entity *e1, Entity *e2) {
     char junction_name[MAX_NAME_LEN];
-    snprintf(junction_name, MAX_NAME_LEN, "%s_%s", e1->name, e2->name);
+    char jname_tmp[MAX_NAME_LEN * 2];
+    snprintf(jname_tmp, sizeof(jname_tmp), "%s_%s", e1->name, e2->name);
+    strncpy(junction_name, jname_tmp, MAX_NAME_LEN - 1);
+    junction_name[MAX_NAME_LEN - 1] = '\0';
 
     if (search_entity(junction_name) || search_relationship(junction_name)) {
         return false;
@@ -856,19 +994,33 @@ static bool create_junction_entity(Relationship *r, Entity *e1, Entity *e2) {
         return false;
     }
 
+    // Migrate PKs from e1 and e2.  Each column is PRIMARY_KEY in the
+    // junction table (so it participates in the composite PK) and also has
+    // its 'references' field set (so generate_sql() emits the FK).
+    // This avoids duplicating columns as separate PK + FK properties.
     for (int i = 0; i < e1->num_properties; i++) {
         if (e1->properties[i] && e1->properties[i]->keytype == PRIMARY_KEY) {
-            addProperty(junction, e1->properties[i]->name, e1->properties[i]->type, PRIMARY_KEY);
+            char name[MAX_NAME_LEN];
+            build_unique_property_name(junction, e1->properties[i]->name, e1->name, name, sizeof(name));
+            addProperty(junction, name, e1->properties[i]->type, PRIMARY_KEY);
+            set_property_reference(junction, name, e1->name);
         }
     }
     for (int i = 0; i < e2->num_properties; i++) {
         if (e2->properties[i] && e2->properties[i]->keytype == PRIMARY_KEY) {
-            addProperty(junction, e2->properties[i]->name, e2->properties[i]->type, PRIMARY_KEY);
+            char name[MAX_NAME_LEN];
+            build_unique_property_name(junction, e2->properties[i]->name, e2->name, name, sizeof(name));
+            addProperty(junction, name, e2->properties[i]->type, PRIMARY_KEY);
+            set_property_reference(junction, name, e2->name);
         }
     }
+
+    // Migrate any relationship properties (e.g. "qty" on an N:N relationship)
     for (int i = 0; i < r->num_properties; i++) {
         if (r->properties[i]) {
-            addProperty(junction, r->properties[i]->name, r->properties[i]->type, r->properties[i]->keytype);
+            char name[MAX_NAME_LEN];
+            build_unique_property_name(junction, r->properties[i]->name, r->name, name, sizeof(name));
+            addProperty(junction, name, r->properties[i]->type, r->properties[i]->keytype);
         }
     }
     return true;
@@ -936,10 +1088,61 @@ bool convert_to_mld(WINDOW *console_win) {
 // simple check for input
 bool valid_name(const char *name) {
     for (size_t i = 0; i < strlen(name); i++) {
-        if (!isalnum(name[i])) {
+        if (!isalnum(name[i]) && name[i] != '_') {
             return false;
         }
     }
 
     return true;
+}
+
+bool parse_save(Parser *p, WINDOW *console, SaveCommand *c) {
+    Token t = peek_token(p->tokens, p->current);
+
+    switch (t.type) {
+    case TOKEN_MCD:
+        c->diagram_type = MCD;
+        advance_token(&p->current);
+        break;
+    case TOKEN_MLD:
+        c->diagram_type = MLD;
+        advance_token(&p->current);
+        break;
+    case TOKEN_SQL:
+        if (global_objects.current_dtype != MLD) {
+            error_msg(console, p, "Cannot convert to sql without converting to MLD first");
+            return false;
+        }
+        c->diagram_type = SQL;
+        advance_token(&p->current);
+        break;
+    default:
+        error_msg(console, p, "Expected diagram type after 'save' (MCD or MLD or SQL)");
+        return false;
+    }
+
+    t = peek_token(p->tokens, p->current);
+    if (t.type != TOKEN_STRING) {
+        error_msg(console, p,
+                  "Expected filename after diagram type (e.g. for MCD/MLD: \"mydiagram.txt\" for SQL: \"schema.sql\")");
+        return false;
+    }
+    if (t.value[0] == '\0') {
+        error_msg(console, p, "Filename cannot be empty");
+        return false;
+    }
+
+    strncpy(c->filename, t.value, MAX_FILENAME_LEN - 1);
+    c->filename[MAX_FILENAME_LEN - 1] = '\0';
+    advance_token(&p->current);
+    return true;
+}
+
+// execute_save: thin wrapper around save_diagram() from utils/save.c.
+bool execute_save(SaveCommand c, WINDOW *console_win) {
+    if (c.diagram_type == SQL) {
+        return generate_sql(c.filename, console_win);
+    }
+
+    return save_diagram(c.filename, c.diagram_type, console_win);
 }

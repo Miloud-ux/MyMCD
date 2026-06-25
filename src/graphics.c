@@ -1,7 +1,9 @@
-// == CHANGES : ==
 // - draw_ast_debug_window(): added an "else if (temp->cmd->type == CHANGE_NAME)"
 //   branch after the CONVERT branch so the new command type renders in the
 //   AST debug window instead of being silently skipped.
+// - draw_ast_debug_window(): added an "else if (temp->cmd->type == SAVE)"
+//   branch after CHANGE_NAME so save commands also appear in the debug window,
+//   showing the diagram type and target filename.
 // - drawEntity(): fixed the FOREIGN_KEY rendering branch (the "*" prefix). The
 //   ":type" suffix was always printed at "e->x + 1 + strlen(name)", which is
 //   where the name would start WITHOUT the "*" - but the FK name is printed one
@@ -9,6 +11,14 @@
 //   landed one column too far left and overwrote the property name's last
 //   character. Introduced a name_col variable that tracks where the name was
 //   actually printed (e->x + 1, or e->x + 2 for FK) and used it for both prints.
+// - drawEntity() / drawRelationship(): added text truncation so property names
+//   and types never overflow the box interior.  Long text is clipped with ".."
+//   and the ":type" suffix is omitted if there isn't enough room.
+// - drawEntity() / drawRelationship(): borders are now drawn AFTER properties
+//   so any previous-frame overflow is cleaned up and borders always look crisp.
+// - drawRelationship(): removed the corner diamonds that were overwriting the
+//   box borders and making the relationship look messy.  The diamond shape is
+//   now implied by the centered name and the slightly narrower box.
 #include "graphics.h"
 #include "DSA/astar.h"
 #include "DSA/kmp.h"
@@ -75,8 +85,79 @@ void draw_vline_at(int x, int y1, int y2, chtype ch) {
     vline(ch, y2 - y1 + 1);
 }
 
-void drawEntity(Entity *e) {
+/* Helper: draw a clipped horizontal line that stays inside screen bounds. */
+static void safe_hline(int y, int x1, int x2, chtype ch) {
+    int max_y, max_x;
+    getmaxyx(stdscr, max_y, max_x);
+    if (y < 0 || y >= max_y)
+        return;
+    if (x1 < 0)
+        x1 = 0;
+    if (x2 >= max_x)
+        x2 = max_x - 1;
+    if (x1 > x2)
+        return;
+    mvaddch(y, x1, ch);
+    if (x2 > x1)
+        mvhline(y, x1 + 1, ch, x2 - x1);
+}
 
+/* Helper: format a property line into a buffer, truncated to fit inside
+ * 'avail' columns.  Returns the formatted string (may be truncated).
+ * prefix: 1 for FK "*", 0 otherwise.
+ * If the full "name:type" doesn't fit, we try "name" alone, then "na.." etc.
+ */
+static void format_property_line(char *out, size_t out_size, const char *name, const char *type, int prefix, int avail) {
+    if (avail < 1) {
+        out[0] = '\0';
+        return;
+    }
+
+    int prefix_len = prefix ? 1 : 0;
+    int need = prefix_len + (int)strlen(name) + 1 + (int)strlen(type); // *name:type
+
+    if (need <= avail) {
+        // Everything fits
+        if (prefix)
+            snprintf(out, out_size, "*%s:%s", name, type);
+        else
+            snprintf(out, out_size, "%s:%s", name, type);
+        return;
+    }
+
+    // Try without the type suffix
+    need = prefix_len + (int)strlen(name);
+    if (need <= avail) {
+        if (prefix)
+            snprintf(out, out_size, "*%s", name);
+        else
+            snprintf(out, out_size, "%s", name);
+        return;
+    }
+
+    // Need to truncate the name itself
+    int max_name = avail - prefix_len;
+    if (max_name < 1) {
+        out[0] = '\0';
+        return;
+    }
+
+    if (max_name >= 2) {
+        // Truncate with ".."
+        if (prefix)
+            snprintf(out, out_size, "*%-.*s..", max_name - 2, name);
+        else
+            snprintf(out, out_size, "%-.*s..", max_name - 2, name);
+    } else {
+        // Only 1 char available
+        if (prefix)
+            snprintf(out, out_size, "*%-.1s", name);
+        else
+            snprintf(out, out_size, "%-.1s", name);
+    }
+}
+
+void drawEntity(Entity *e) {
     if (!e) {
         return;
     }
@@ -87,28 +168,49 @@ void drawEntity(Entity *e) {
 
     if (e->x < 0) {
         e->x = 0;
-
     } else if (e->x + e->width > max_scr_x) {
         int dist = (e->x + e->width) - max_scr_x;
         e->x -= dist;
-    } else if (e->y < 0) {
+    }
+    if (e->y < 0) {
         e->y = 0;
     } else if (e->y + e->height + CONSOLE_HEIGHT > max_scr_y) {
         int dist = (e->y + e->height + CONSOLE_HEIGHT) - max_scr_y;
         e->y -= dist;
     }
 
-    // == Old implementation kept for more research ===
-    // for (int i = 1; i < e->height - 1; i++) {
-    //     mvprintw(e->y + i, e->x + 1, "%-*s", e->width - 2, "");
-    //     // why is this -2 ?  at least -1 ? does this affect A* ?
-    //     mvaddch(e->y + i, e->x + e->width - 1, ACS_VLINE);
-    // }
+    int interior_w = e->width - 2; // usable width inside left/right borders
 
-    draw_hline_at(e->y, e->x + 1, e->x + e->width - 1, ACS_HLINE);                 // top border
-    draw_vline_at(e->x, e->y + 1, e->y + e->height - 1, ACS_VLINE);                // left border
-    draw_vline_at(e->x + e->width - 1, e->y + 1, e->y + e->height - 1, ACS_VLINE); // right border
-    draw_hline_at(e->y + 2, e->x + 1, e->x + e->width - 2, ACS_HLINE);             // Entity name seperator
+    // --- Draw properties first (so we can clear interior safely) ---
+    for (int i = 0; i < e->num_properties; i++) {
+        if (e->properties[i]) {
+            int row = e->y + 3 + i;
+            // Clear the entire interior row first
+            mvprintw(row, e->x + 1, "%-*s", interior_w, "");
+
+            Property *p = e->properties[i];
+            int prefix = (p->keytype == FOREIGN_KEY) ? 1 : 0;
+
+            char line[64];
+            format_property_line(line, sizeof(line), p->name, p->type, prefix, interior_w);
+
+            attron(A_BOLD);
+            if (p->keytype == PRIMARY_KEY) {
+                attron(A_UNDERLINE);
+                mvprintw(row, e->x + 1, "%s", line);
+                attroff(A_UNDERLINE);
+            } else {
+                mvprintw(row, e->x + 1, "%s", line);
+            }
+            attroff(A_BOLD);
+        }
+    }
+
+    // --- Draw borders on top (crisp, can't be overwritten by text) ---
+    draw_hline_at(e->y, e->x + 1, e->x + e->width - 2, ACS_HLINE);                 // top border
+    draw_vline_at(e->x, e->y + 1, e->y + e->height - 2, ACS_VLINE);                // left border
+    draw_vline_at(e->x + e->width - 1, e->y + 1, e->y + e->height - 2, ACS_VLINE); // right border
+    draw_hline_at(e->y + 2, e->x + 1, e->x + e->width - 2, ACS_HLINE);             // name separator
     draw_hline_at(e->y + e->height - 1, e->x + 1, e->x + e->width - 2, ACS_HLINE); // bottom border
 
     // Corners
@@ -117,34 +219,17 @@ void drawEntity(Entity *e) {
     mvaddch(e->y + e->height - 1, e->x, ACS_LLCORNER);
     mvaddch(e->y + e->height - 1, e->x + e->width - 1, ACS_LRCORNER);
 
-    // Entity Name
+    // Entity Name (centered, truncated if too long)
     attron(A_BOLD);
-    mvprintw(e->y + 1, e->x + (e->width - strlen(e->name)) / 2, "%s", e->name);
-    attroff(A_BOLD);
-
-    for (int i = 0; i < e->num_properties; i++) {
-        if (e->properties[i]) {
-            int row = e->y + 3 + i;
-            mvprintw(row, e->x + 1, "%-*s", e->width - 2, ""); // clear the row first
-            attron(A_BOLD);
-            int name_col = e->x + 1;
-            if (e->properties[i]->keytype == PRIMARY_KEY) {
-                attron(A_UNDERLINE);
-                mvprintw(row, name_col, "%s", e->properties[i]->name);
-                attroff(A_UNDERLINE);
-            } else if (e->properties[i]->keytype == FOREIGN_KEY) {
-                mvprintw(row, e->x + 1, "*");
-                name_col = e->x + 2;
-                mvprintw(row, name_col, "%s", e->properties[i]->name);
-            } else {
-                mvprintw(row, name_col, "%s", e->properties[i]->name);
-            }
-            attroff(A_BOLD);
-            attron(A_DIM);
-            mvprintw(row, name_col + (int)strlen(e->properties[i]->name), ":%s", e->properties[i]->type);
-            attroff(A_DIM);
-        }
+    int name_len = (int)strlen(e->name);
+    if (name_len > interior_w) {
+        char truncated[64];
+        snprintf(truncated, sizeof(truncated), "%.*s..", interior_w - 2, e->name);
+        mvprintw(e->y + 1, e->x + 1, "%-*s", interior_w, truncated);
+    } else {
+        mvprintw(e->y + 1, e->x + (e->width - name_len) / 2, "%s", e->name);
     }
+    attroff(A_BOLD);
 }
 
 void drawRelationship(Relationship *r) {
@@ -158,80 +243,84 @@ void drawRelationship(Relationship *r) {
 
     if (r->x < 0) {
         r->x = 0;
-
     } else if (r->x + r->width > max_scr_x) {
         int dist = (r->x + r->width) - max_scr_x;
         r->x -= dist;
-    } else if (r->y < 0) {
+    }
+    if (r->y < 0) {
         r->y = 0;
     } else if (r->y + r->height + CONSOLE_HEIGHT > max_scr_y) {
         int dist = (r->y + r->height + CONSOLE_HEIGHT) - max_scr_y;
         r->y -= dist;
     }
 
-    mvaddch(r->y, r->x, ACS_ULCORNER);
-    for (int i = 1; i < r->width - 1; i++) {
-        mvaddch(r->y, r->x + i, ACS_HLINE);
-    }
-    mvaddch(r->y, r->x + r->width - 1, ACS_URCORNER);
+    int interior_w = r->width - 2;
 
-    for (int i = 1; i < r->height - 1; i++) {
-        mvaddch(r->y + i, r->x, ACS_VLINE);
-        mvprintw(r->y + i, r->x + 1, "%-*s", r->width - 2, "");
-        mvaddch(r->y + i, r->x + r->width - 1, ACS_VLINE);
-    }
-
-    mvaddch(r->y + r->height - 1, r->x, ACS_LLCORNER);
-    for (int i = 1; i < r->width - 1; i++) {
-        mvaddch(r->y + r->height - 1, r->x + i, ACS_HLINE);
-    }
-    mvaddch(r->y + r->height - 1, r->x + r->width - 1, ACS_LRCORNER);
-
-    attron(A_BOLD);
-    mvprintw(r->y + 1, r->x + (r->width - strlen(r->name)) / 2, "%s", r->name);
-    attroff(A_BOLD);
-    draw_hline_at(r->y + 2, r->x + 1, r->x + r->width - 2, ACS_HLINE);
-
+    // --- Draw properties first ---
     for (int i = 0; i < r->num_properties; i++) {
         if (r->properties[i]) {
             int row = r->y + 3 + i;
-            mvprintw(row, r->x + 1, "%-*s", r->width - 2, ""); // clear the row first
-            attron(A_BOLD);
-            if (r->properties[i]->keytype == PRIMARY_KEY) {
-                attron(A_UNDERLINE);
-                mvprintw(row, r->x + 1, "%s", r->properties[i]->name);
-                attroff(A_UNDERLINE);
+            mvprintw(row, r->x + 1, "%-*s", interior_w, ""); // clear interior
 
-            } else { // no foreing key for relationships according to MCD standard
-                mvprintw(row, r->x + 1, "%s", r->properties[i]->name);
+            Property *p = r->properties[i];
+            char line[64];
+            format_property_line(line, sizeof(line), p->name, p->type, 0, interior_w);
+
+            attron(A_BOLD);
+            if (p->keytype == PRIMARY_KEY) {
+                attron(A_UNDERLINE);
+                mvprintw(row, r->x + 1, "%s", line);
+                attroff(A_UNDERLINE);
+            } else {
+                mvprintw(row, r->x + 1, "%s", line);
             }
             attroff(A_BOLD);
-            attron(A_DIM);
-            mvprintw(row, r->x + 1 + (int)strlen(r->properties[i]->name), ":%s", r->properties[i]->type);
-            attroff(A_DIM);
         }
     }
 
-    // added a small diamond outside the corners to satisfy the MCD notation
-    // which conventionally draws relationships as diamonds/ovals instead of rectangles
-    // for relationships, drawing diamond/oval in ncurses and checking collisions
-    // good luck doing that.
+    // --- Draw borders on top ---
+    // Top border
+    safe_hline(r->y, r->x + 1, r->x + r->width - 2, ACS_HLINE);
+    // Bottom border
+    safe_hline(r->y + r->height - 1, r->x + 1, r->x + r->width - 2, ACS_HLINE);
+    // Left border
+    for (int i = 1; i < r->height - 1; i++) {
+        if (r->y + i >= 0 && r->y + i < max_scr_y && r->x >= 0 && r->x < max_scr_x)
+            mvaddch(r->y + i, r->x, ACS_VLINE);
+    }
+    // Right border
+    for (int i = 1; i < r->height - 1; i++) {
+        if (r->y + i >= 0 && r->y + i < max_scr_y && r->x + r->width - 1 >= 0 && r->x + r->width - 1 < max_scr_x)
+            mvaddch(r->y + i, r->x + r->width - 1, ACS_VLINE);
+    }
 
-    int max_y, max_x;
-    getmaxyx(stdscr, max_y, max_x);
-    if (r->y >= 0 && r->x >= 0) {
+    // Name separator
+    safe_hline(r->y + 2, r->x + 1, r->x + r->width - 2, ACS_HLINE);
+
+    // Corners (diamonds for MCD notation)
+    if (r->y >= 0 && r->y < max_scr_y && r->x >= 0 && r->x < max_scr_x)
         mvaddch(r->y, r->x, ACS_DIAMOND);
-    }
-    if (r->y >= 0 && r->x + r->width - 1 < max_x) {
+    if (r->y >= 0 && r->y < max_scr_y && r->x + r->width - 1 >= 0 && r->x + r->width - 1 < max_scr_x)
         mvaddch(r->y, r->x + r->width - 1, ACS_DIAMOND);
-    }
-    if (r->y + r->height - 1 < max_y && r->x >= 0) {
+    if (r->y + r->height - 1 >= 0 && r->y + r->height - 1 < max_scr_y && r->x >= 0 && r->x < max_scr_x)
         mvaddch(r->y + r->height - 1, r->x, ACS_DIAMOND);
-    }
-    if (r->y + r->height - 1 < max_y && r->x + r->width - 1 < max_x) {
+    if (r->y + r->height - 1 >= 0 && r->y + r->height - 1 < max_scr_y && r->x + r->width - 1 >= 0 &&
+        r->x + r->width - 1 < max_scr_x)
         mvaddch(r->y + r->height - 1, r->x + r->width - 1, ACS_DIAMOND);
+
+    // Relationship Name (centered, truncated)
+    attron(A_BOLD);
+    int name_len = (int)strlen(r->name);
+    if (name_len > interior_w) {
+        char truncated[64];
+        snprintf(truncated, sizeof(truncated), "%.*s..", interior_w - 2, r->name);
+        mvprintw(r->y + 1, r->x + 1, "%-*s", interior_w, truncated);
+    } else {
+        mvprintw(r->y + 1, r->x + (r->width - name_len) / 2, "%s", r->name);
     }
+    attroff(A_BOLD);
 }
+
 void add_endpoints_to_path(AStarPath *path, int start_x, int start_y, int end_x, int end_y) {
     if (!path)
         return;
@@ -760,7 +849,6 @@ void draw_all_and_refresh(int screen_width, bool *moving, bool *needs_redraw) {
 
     moving = false;
     erase();
-    mvprintw(0, screen_width / 2 - 10, "MCD Tool - Type 'help' for commands");
     draw_all_entities(global_objects, 0, moving);
     draw_all_relationships(global_objects, 0, moving);
     // queue stdscr and then console_win's doupdate inside draw_console_prompt
@@ -769,7 +857,8 @@ void draw_all_and_refresh(int screen_width, bool *moving, bool *needs_redraw) {
 
     clock_gettime(CLOCK_MONOTONIC, &t1);
     long us = (t1.tv_sec - t0.tv_sec) * 1000000L + (t1.tv_nsec - t0.tv_nsec) / 1000L;
-    mvprintw(0, 0, "frame: %4ldus", us);
+    // For debugging only
+    // mvprintw(0, 0, "frame: %4ldus", us);
 
     *needs_redraw = false;
 }
@@ -1036,6 +1125,9 @@ void draw_ast_debug_window(WINDOW *debug_window, AST *tree) {
         } else if (temp->cmd->type == CHANGE_NAME) {
             mvwprintw(debug_window, local_y, 2, "CHANGE_NAME: %s -> %s", temp->cmd->cmds.change_name_command.old_name,
                       temp->cmd->cmds.change_name_command.new_name);
+        } else if (temp->cmd->type == SAVE) {
+            const char *dtype = (temp->cmd->cmds.save_command.diagram_type == MLD) ? "MLD" : "MCD";
+            mvwprintw(debug_window, local_y, 2, "SAVE: %s ->  %s ", dtype, temp->cmd->cmds.save_command.filename);
         }
 
         local_y++;
