@@ -6,6 +6,8 @@ Tired of using the mouse when creating your diagrams ? just type comands you get
 
 **Status: Beta** – This is a hobby project I have been working on for around 5 months. It is functional and I use it regularly, but there are rough edges. Feedback and contributions are welcome.
 
+Credits: A friend of mine had this idea and i started developing it as a hobby project that grew fast so props to Skander.
+
 ---
 
 ## What it does
