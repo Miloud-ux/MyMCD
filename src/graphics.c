@@ -1,24 +1,4 @@
-// - draw_ast_debug_window(): added an "else if (temp->cmd->type == CHANGE_NAME)"
-//   branch after the CONVERT branch so the new command type renders in the
-//   AST debug window instead of being silently skipped.
-// - draw_ast_debug_window(): added an "else if (temp->cmd->type == SAVE)"
-//   branch after CHANGE_NAME so save commands also appear in the debug window,
-//   showing the diagram type and target filename.
-// - drawEntity(): fixed the FOREIGN_KEY rendering branch (the "*" prefix). The
-//   ":type" suffix was always printed at "e->x + 1 + strlen(name)", which is
-//   where the name would start WITHOUT the "*" - but the FK name is printed one
-//   column over (at "e->x + 2") to make room for the "*". So the ":type" print
-//   landed one column too far left and overwrote the property name's last
-//   character. Introduced a name_col variable that tracks where the name was
-//   actually printed (e->x + 1, or e->x + 2 for FK) and used it for both prints.
-// - drawEntity() / drawRelationship(): added text truncation so property names
-//   and types never overflow the box interior.  Long text is clipped with ".."
-//   and the ":type" suffix is omitted if there isn't enough room.
-// - drawEntity() / drawRelationship(): borders are now drawn AFTER properties
-//   so any previous-frame overflow is cleaned up and borders always look crisp.
-// - drawRelationship(): removed the corner diamonds that were overwriting the
-//   box borders and making the relationship look messy.  The diamond shape is
-//   now implied by the centered name and the slightly narrower box.
+
 #include "graphics.h"
 #include "DSA/astar.h"
 #include "DSA/kmp.h"
