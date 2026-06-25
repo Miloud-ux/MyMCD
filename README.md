@@ -17,8 +17,7 @@ The whole thing runs in a TUI (terminal user interface) with color-coded element
 
 ### Demo
 ![Main interface](./assets/menuscreenshot.png)
-<video src="./assets/demovid.mp4" width="640" autoplay loop muted playsinline></video>
-
+![Demo GIF](./assets/demovid_real.gif)
 ---
 
 ## Features
