@@ -14,6 +14,11 @@ MyMCD lets you draw Entity-Relationship diagrams directly in your terminal. You 
 
 The whole thing runs in a TUI (terminal user interface) with color-coded elements, A* pathfinding for relationship lines that route around boxes, and a built-in searchable help system.
 
+
+### Demo
+![Main interface](./assets/menuscreenshot.png)
+![Demo GIF](./assets/demo.gif)
+
 ---
 
 ## Features
