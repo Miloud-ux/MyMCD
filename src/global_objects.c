@@ -1,11 +1,3 @@
-// == CHANGES : ==
-// - Added unregister_relationship() after register_relationship(). It finds
-//   the relationship by pointer in global_objects.relationships[], frees its
-//   properties and its cardinality pair (cards[0]/cards[1] are the same
-//   malloc'd block from addCardinalityAPI, so only cards[0] is freed), frees
-//   the relationship itself, then sets the array slot to NULL (matching how
-//   draw_all_relationships/get_attach_slot etc. already guard against NULL
-//   entries instead of compacting the array).
 #include "global_objects.h"
 #include <stdlib.h>
 
