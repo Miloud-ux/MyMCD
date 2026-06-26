@@ -1,8 +1,7 @@
 # MyMCD
+A terminal-based database schema designer for the Merise methodology. Draw MCD (Conceptual Data Model) diagrams with entities and relationships, convert them to MLD (Logical Data Model), and export production-ready SQL — all from the keyboard.
 
-A terminal-based MCD (Modelle Conceptuelle des Donnes) designer. Model your database schema as entities and relationships, then convert to MLD (Logical Data Model) and export SQL. Built with ncurses for a lightweight, keyboard-driven workflow Vim inspired.
-
-Tired of using the mouse when creating your diagrams ? just type comands you get a production ready diagram.
+Built with **ncurses** for a lightweight, Vim-inspired workflow. No mouse required: type commands, get a diagram.
 
 **Status: Beta** – This is a hobby project I have been working on for around 5 months. It is functional and I use it regularly, but there are rough edges. Feedback and contributions are welcome.
 
