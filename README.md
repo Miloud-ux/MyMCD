@@ -242,16 +242,12 @@ Test results are written to `*_test_results.log` files.
 
 This is beta software. Here is what you should know:
 
-- **Name length limit**: 14 characters for entity, relationship, and property names
-- **Property cap**: 20 properties max per entity or relationship
-- **Object cap**: 100 total entities and relationships
 - **One-way conversion**: MCD to MLD conversion cannot be undone. Save your MCD before converting.
 - **Terminal only**: No GUI version. Requires a terminal with ncurses and color support.
 - **Resize handling**: Terminal resizing is basic. If the layout breaks, restart the application.
 - **Wayland flicker**: Some rendering optimizations are Wayland-specific; X11 and Windows terminals may have minor flicker during rapid redraws.
 - **Windows install**: `make install` is disabled on Windows. Use `make run` instead.
 - **Save format**: Diagrams are saved as plain text command scripts, not binary files. This is intentional for version control, but there is no schema validation on load.
-- **Foreign keys**: Adding `fk` properties is rejected in MCD mode. Convert to MLD first.
 - **No undo**: There is no undo command yet. `clear` wipes everything without confirmation.
 
 ---
