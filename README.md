@@ -1,11 +1,7 @@
 # MyMCD
-A terminal-based database schema designer for the Merise methodology. Draw MCD (Conceptual Data Model) diagrams with entities and relationships, convert them to MLD (Logical Data Model), and export production-ready SQL — all from the keyboard.
+A terminal-based database schema designer for the Merise methodology. Draw MCD (Conceptual Data Model) diagrams with entities and relationships, convert them to MLD (Logical Data Model), and export production-ready SQL — all from the keyboard, type commands, get a diagram.
 
-Built with **ncurses** for a lightweight, Vim-inspired workflow. No mouse required: type commands, get a diagram.
 
-**Status: Beta** – This is a hobby project I have been working on for around 5 months. It is functional and I use it regularly, but there are rough edges. Feedback and contributions are welcome.
-
-Credits: A friend of mine had this idea and i started developing it as a hobby project that grew fast so props to [Iskander](https://github.com/iskanderMQ)
 
 ---
 
@@ -254,8 +250,12 @@ This is beta software. Here is what you should know:
 
 ## Why I built this
 
-I started MyMCD because I wanted a fast, lightweight tool for sketching database schemas without leaving the terminal (where i spend most of my time) and without my hands leaving my keyboard. Existing tools were either too heavy, required a browser, Old,  or did not support the Merise methodology (MCD/MLD) that I learned in school. Five months of evenings and weekends later, here it is. It is not perfect, but it does exactly what I need, and I hope it helps someone else too.
+Credits: A friend of mine had this idea and i liked it so i started developing it because i wanted a fast, lightweight tool for sketching database schemas without leaving the terminal (where i spend most of my time) and without my hands leaving my keyboard. Existing tools were either too heavy, required a browser, Old,  or did not support the Merise methodology (MCD/MLD) that I learned in school. Five months of evenings and weekends later, here it is. It is not perfect, but it does exactly what I need, and I hope it helps someone else too.
 
+so props to [Iskander](https://github.com/iskanderMQ)
+
+
+ 
 ---
 
 ## License
