@@ -1,16 +1,3 @@
-// == tokenize.h ==
-//
-// == CHANGES : ==
-// - TokenType enum: added TOKEN_CHANGE and TOKEN_NAME (right after
-//   TOKEN_CLEAR) for the new "change name" command keywords.
-// - TokenType enum: added TOKEN_SAVE (right after TOKEN_NAME) and
-//   TOKEN_MCD (right after TOKEN_MLD) for the new "save" command.
-//   TOKEN_SAVE matches the keyword "save".
-//   TOKEN_MCD  matches the keyword "MCD" (the existing TOKEN_MLD
-//   already covers "MLD"; MCD was previously only an identifier).
-//   TOKEN_FILE is NOT added as a separate type because filenames are
-//   passed as quoted strings and TOKEN_STRING is the correct type for
-//   them – no disambiguation is needed in the parser.
 #ifndef SRC_TOKENIZE_H_
 #define SRC_TOKENIZE_H_
 
@@ -32,6 +19,7 @@ typedef enum {
     TOKEN_MCD,
     TOKEN_SQL,
     TOKEN_DELETE,
+    TOKEN_UNDO,
     TOKEN_STRING,
     TOKEN_IDENTIFIER,
     TOKEN_HELP,

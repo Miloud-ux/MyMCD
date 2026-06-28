@@ -11,6 +11,9 @@
 
 #define MAX_COMMAND_HISTORY 50
 
+// Test diagram
+static void setup_large_e_commerce_delivery_mcd(void);
+
 int main() {
     initscr();
 
@@ -91,7 +94,8 @@ int main() {
     init_AST(&tree);
 
     if (startup_choice == MENU_NEW) {
-        // Was testing diagram here
+        // Load the built-in test diagram (original behaviour)
+        setup_large_e_commerce_delivery_mcd();
     } else {
         // MENU_LOAD: prompt for filename, then replay commands from the file.
         // Draw a simple centred prompt directly on stdscr.
@@ -192,7 +196,7 @@ int main() {
                 } else if (strcmp(input_buffer, "debug") == 0) {
                     draw_ast_debug_window(debug_window, &tree);
                 } else {
-                    da_execute(&tree, &a, console_win, input_buffer, &needs_redraw);
+                    execute_command(&tree, &a, console_win, input_buffer, &needs_redraw);
                 }
                 input_len = 0;
                 input_buffer[0] = '\0';
@@ -499,4 +503,68 @@ int main() {
     destroy_arena(&a);
     endwin();
     return 0;
+}
+
+static void setup_large_e_commerce_delivery_mcd(void) {
+    // ==========================================
+    // 1. ENTITIES & PROPERTIES
+    // (All names strictly < 15 characters)
+    // ==========================================
+
+    Entity *customer = createEntity("Customer", 5, 5);
+    addProperty(customer, "cust_id", "int", PRIMARY_KEY);
+    addProperty(customer, "email", "str", NORMAL_KEY);
+
+    Entity *profile = createEntity("Profile", 50, 5);
+    addProperty(profile, "prof_id", "int", PRIMARY_KEY);
+    addProperty(profile, "bio", "str", NORMAL_KEY);
+
+    Entity *category = createEntity("Category", 5, 30);
+    addProperty(category, "cat_id", "int", PRIMARY_KEY);
+    addProperty(category, "cat_name", "str", NORMAL_KEY);
+
+    Entity *order = createEntity("Orders", 50, 30);
+    addProperty(order, "order_id", "int", PRIMARY_KEY);
+    addProperty(order, "ord_date", "date", NORMAL_KEY);
+
+    Entity *product = createEntity("Product", 95, 30);
+    addProperty(product, "prod_id", "int", PRIMARY_KEY);
+    addProperty(product, "price", "double", NORMAL_KEY);
+
+    Entity *warehouse = createEntity("Warehouse", 140, 30);
+    addProperty(warehouse, "wh_id", "int", PRIMARY_KEY);
+    addProperty(warehouse, "capacity", "int", NORMAL_KEY);
+
+    // ==========================================
+    // 2. RELATIONSHIPS & CARDINALITIES
+    // ==========================================
+
+    // Case A: 1:1 Relationship (Optional on Customer, Mandatory on Profile)
+    // MLD EXPECTATION: Profile table gets 'cust_id' as a FOREIGN_KEY (Unique).
+    Relationship *r_has_prof = addRelationship(27, 5, customer, profile, "HasProf");
+    addCardinalityAPI("0,1,1,1", r_has_prof);
+
+    // Case B: 1:N Relationship (Customer places many Orders)
+    // MLD EXPECTATION: Orders table gets 'cust_id' as a FOREIGN_KEY.
+    Relationship *r_places = addRelationship(27, 17, customer, order, "Places");
+    addCardinalityAPI("0,n,1,1", r_places);
+
+    // Case C: Unary / Reflexive Relationship (Category hierarchy)
+    // MLD EXPECTATION: Category gets its own PK as a FOREIGN_KEY (e.g., parent_id).
+    // This will severely test your `migrate_foreign_key()` and `references` logic.
+    Relationship *r_subcat = addRelationship(5, 50, category, category, "SubCat");
+    addCardinalityAPI("0,1,0,n", r_subcat);
+
+    // Case D: N:M Relationship with an Attribute (Order Line)
+    // MLD EXPECTATION: A junction table "Contains" is created.
+    // It gets 'order_id' and 'prod_id' as FKs (forming a composite PK),
+    // AND it must include the 'qty' property as a NORMAL_KEY.
+    Relationship *r_contains = addRelationship(72, 30, order, product, "Contains");
+    addCardinalityAPI("1,n,0,n", r_contains);
+    addPropertyRelationship(r_contains, "qty", "int", NORMAL_KEY);
+
+    // Case E: Standard N:M Relationship (Warehouse Stocks)
+    // MLD EXPECTATION: A junction table "Stocks" is created with two FKs.
+    Relationship *r_stocks = addRelationship(117, 30, warehouse, product, "Stocks");
+    addCardinalityAPI("0,n,0,n", r_stocks);
 }

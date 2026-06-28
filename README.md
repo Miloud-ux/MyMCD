@@ -14,6 +14,9 @@ The whole thing runs in a TUI (terminal user interface) with color-coded element
 
 ### Demo
 ![Main interface](./assets/menuscreenshot.png)
+![MCD Demo](./assets/mcd_demo.jpg)
+![MLD Demo](./assets/mld_demo.jpg)
+![SQL Demo](./assets/sql_demo.jpg)
 ---
 
 ## Features

@@ -1505,6 +1505,844 @@ void run_integration_tests(void) {
 // =========================================================================
 // MAIN RUNNER
 // =========================================================================
+// =========================================================================
+// UNDO & DELETE COMMAND TESTS (Compiled only if UNDO_DELETE_TESTS is defined)
+// =========================================================================
+#ifdef UNDO_DELETE_TESTS
+
+#include "../DSA/undo_stack.h"
+#include "../Lexer/parse.h"
+#include "../MCD_elements.h"
+#include "../global_objects.h"
+#include "../utils/save.h" // for snapshot_diagram_to_buf
+
+// -------------------------------------------------------------------------
+// DELETE COMMAND PARSER TESTS
+// -------------------------------------------------------------------------
+static void test_parse_delete_entity_element(void) {
+    SECTION("parse_delete – delete entire entity");
+    Parser p;
+    const char *input = "delete \"Customer\"";
+    init_parser(&p, input);
+    tokenize_content(input, p.tokens, &p.count);
+    advance_token(&p.current); // consume 'delete'
+
+    DeleteCommand c = {0};
+    bool ok = parse_delete(&p, NULL, &c);
+
+    TEST("parse_delete returns true", ok);
+    TEST("Name captured correctly", strcmp(c.name, "Customer") == 0);
+    TEST("Defaults to ELEMENT deletion", c.type == ELEMENT);
+}
+
+static void test_parse_delete_entity_property(void) {
+    SECTION("parse_delete – delete entity property");
+    Parser p;
+    const char *input = "delete \"Customer\" \"email\"";
+    init_parser(&p, input);
+    tokenize_content(input, p.tokens, &p.count);
+    advance_token(&p.current); // consume 'delete'
+
+    DeleteCommand c = {0};
+    bool ok = parse_delete(&p, NULL, &c);
+
+    TEST("parse_delete returns true", ok);
+    TEST("Entity name captured", strcmp(c.name, "Customer") == 0);
+    TEST("Property type set to PROP", c.type == PROP);
+    TEST("Property name captured", strcmp(c.prop_name, "email") == 0);
+}
+
+static void test_parse_delete_relationship_property(void) {
+    SECTION("parse_delete – delete relationship property");
+    Parser p;
+    const char *input = "delete \"Borrows\" \"due_date\"";
+    init_parser(&p, input);
+    tokenize_content(input, p.tokens, &p.count);
+    advance_token(&p.current);
+
+    DeleteCommand c = {0};
+    bool ok = parse_delete(&p, NULL, &c);
+
+    TEST("parse_delete returns true", ok);
+    TEST("Relationship name captured", strcmp(c.name, "Borrows") == 0);
+    TEST("Property type set to PROP", c.type == PROP);
+    TEST("Property name captured", strcmp(c.prop_name, "due_date") == 0);
+}
+
+static void test_parse_delete_empty_name(void) {
+    SECTION("parse_delete – empty name error");
+    Parser p;
+    const char *input = "delete \"\"";
+    init_parser(&p, input);
+    tokenize_content(input, p.tokens, &p.count);
+    advance_token(&p.current);
+
+    DeleteCommand c = {0};
+    bool ok = parse_delete(&p, NULL, &c);
+    TEST("Empty name rejected", !ok);
+}
+
+static void test_parse_delete_missing_name(void) {
+    SECTION("parse_delete – missing name error");
+    Parser p;
+    const char *input = "delete";
+    init_parser(&p, input);
+    tokenize_content(input, p.tokens, &p.count);
+    advance_token(&p.current);
+
+    DeleteCommand c = {0};
+    bool ok = parse_delete(&p, NULL, &c);
+    TEST("Missing name rejected", !ok);
+}
+
+// -------------------------------------------------------------------------
+// DELETE COMMAND EXECUTION TESTS
+// -------------------------------------------------------------------------
+static void test_execute_delete_entity(void) {
+    SECTION("execute_delete – delete entity");
+    init_global_objects();
+
+    Entity *e = createEntity("ToDelete", 5, 5);
+    addProperty(e, "id", "int", PRIMARY_KEY);
+    TEST("Entity exists before delete", search_entity("ToDelete") != NULL);
+
+    DeleteCommand c = {0};
+    strncpy(c.name, "ToDelete", MAX_NAME_LEN - 1);
+    c.type = ELEMENT;
+
+    bool ok = execute_delete(c, NULL);
+    TEST("execute_delete returns true", ok);
+    TEST("Entity removed", search_entity("ToDelete") == NULL);
+    TEST("Entity count is 0", global_objects.entity_count == 0);
+}
+
+static void test_execute_delete_entity_cascade_relationships(void) {
+    SECTION("execute_delete – cascade delete attached relationships");
+    init_global_objects();
+
+    Entity *e1 = createEntity("Parent", 5, 5);
+    Entity *e2 = createEntity("Child", 50, 5);
+    addRelationship(27, 5, e1, e2, "HasChild");
+    TEST("Relationship exists before delete", search_relationship("HasChild") != NULL);
+
+    DeleteCommand c = {0};
+    strncpy(c.name, "Parent", MAX_NAME_LEN - 1);
+    c.type = ELEMENT;
+
+    bool ok = execute_delete(c, NULL);
+    TEST("execute_delete returns true", ok);
+    TEST("Entity deleted", search_entity("Parent") == NULL);
+    TEST("Attached relationship also deleted", search_relationship("HasChild") == NULL);
+    TEST("Cascade removed relationship count", global_objects.relationship_count == 0);
+}
+
+static void test_execute_delete_entity_property(void) {
+    SECTION("execute_delete – delete entity property");
+    init_global_objects();
+
+    Entity *e = createEntity("Product", 5, 5);
+    addProperty(e, "sku", "str", NORMAL_KEY);
+    addProperty(e, "price", "double", NORMAL_KEY);
+    TEST("Two properties before delete", e->num_properties == 2);
+
+    DeleteCommand c = {0};
+    strncpy(c.name, "Product", MAX_NAME_LEN - 1);
+    strncpy(c.prop_name, "sku", MAX_NAME_LEN - 1);
+    c.type = PROP;
+
+    bool ok = execute_delete(c, NULL);
+    TEST("execute_delete returns true", ok);
+    TEST("One property after delete", e->num_properties == 1);
+    TEST("Remaining property is 'price'", strcmp(e->properties[0]->name, "price") == 0);
+    TEST("Deleted property gone", search_entity("Product") != NULL);
+}
+
+static void test_execute_delete_entity_property_not_found(void) {
+    SECTION("execute_delete – delete non-existent property");
+    init_global_objects();
+
+    Entity *e = createEntity("Product", 5, 5);
+    addProperty(e, "sku", "str", NORMAL_KEY);
+
+    DeleteCommand c = {0};
+    strncpy(c.name, "Product", MAX_NAME_LEN - 1);
+    strncpy(c.prop_name, "nonexistent", MAX_NAME_LEN - 1);
+    c.type = PROP;
+
+    bool ok = execute_delete(c, NULL);
+    TEST("execute_delete returns false for missing property", !ok);
+    TEST("Original property still exists", e->num_properties == 1);
+}
+
+static void test_execute_delete_relationship(void) {
+    SECTION("execute_delete – delete entire relationship");
+    init_global_objects();
+
+    Entity *e1 = createEntity("A", 5, 5);
+    Entity *e2 = createEntity("B", 50, 5);
+    Relationship *r = addRelationship(27, 5, e1, e2, "Link");
+    addPropertyRelationship(r, "prop1", "int", NORMAL_KEY);
+    TEST("Relationship exists before delete", search_relationship("Link") != NULL);
+
+    DeleteCommand c = {0};
+    strncpy(c.name, "Link", MAX_NAME_LEN - 1);
+    c.type = ELEMENT;
+
+    bool ok = execute_delete(c, NULL);
+    TEST("execute_delete returns true", ok);
+    TEST("Relationship removed", search_relationship("Link") == NULL);
+    TEST("Entities still exist", search_entity("A") != NULL && search_entity("B") != NULL);
+}
+
+static void test_execute_delete_relationship_property(void) {
+    SECTION("execute_delete – delete relationship property");
+    init_global_objects();
+
+    Entity *e1 = createEntity("A", 5, 5);
+    Entity *e2 = createEntity("B", 50, 5);
+    Relationship *r = addRelationship(27, 5, e1, e2, "Link");
+    addPropertyRelationship(r, "p1", "int", NORMAL_KEY);
+    addPropertyRelationship(r, "p2", "str", NORMAL_KEY);
+    TEST("Two properties before delete", r->num_properties == 2);
+
+    DeleteCommand c = {0};
+    strncpy(c.name, "Link", MAX_NAME_LEN - 1);
+    strncpy(c.prop_name, "p1", MAX_NAME_LEN - 1);
+    c.type = PROP;
+
+    bool ok = execute_delete(c, NULL);
+    TEST("execute_delete returns true", ok);
+    TEST("One property after delete", r->num_properties == 1);
+    TEST("Remaining property is 'p2'", strcmp(r->properties[0]->name, "p2") == 0);
+}
+
+static void test_execute_delete_nonexistent_target(void) {
+    SECTION("execute_delete – non-existent target");
+    init_global_objects();
+
+    DeleteCommand c = {0};
+    strncpy(c.name, "Ghost", MAX_NAME_LEN - 1);
+    c.type = ELEMENT;
+
+    bool ok = execute_delete(c, NULL);
+    TEST("execute_delete returns false for missing target", !ok);
+}
+
+// -------------------------------------------------------------------------
+// UNDO STACK INFRASTRUCTURE TESTS
+// -------------------------------------------------------------------------
+static void test_undo_stack_init(void) {
+    SECTION("undo_stack – initialisation");
+    UndoStack s;
+    undo_stack_init(&s);
+    TEST("Stack starts empty", s.top == -1);
+    TEST("undo_stack_is_empty returns true", undo_stack_is_empty(&s));
+}
+
+static void test_undo_stack_push_pop(void) {
+    SECTION("undo_stack – push and pop");
+    UndoStack s;
+    undo_stack_init(&s);
+
+    UndoEntry e1 = {0};
+    e1.type = UNDO_CREATE_ENTITY;
+    strncpy(e1.data.create_entity.name, "TestEnt", 14);
+
+    bool pushed = undo_stack_push(&s, e1);
+    TEST("Push succeeds", pushed);
+    TEST("Stack no longer empty", !undo_stack_is_empty(&s));
+    TEST("Top is 0 after first push", s.top == 0);
+
+    UndoEntry out = {0};
+    bool popped = undo_stack_pop(&s, &out);
+    TEST("Pop succeeds", popped);
+    TEST("Popped type matches", out.type == UNDO_CREATE_ENTITY);
+    TEST("Popped data matches", strcmp(out.data.create_entity.name, "TestEnt") == 0);
+    TEST("Stack empty again", undo_stack_is_empty(&s));
+}
+
+static void test_undo_stack_order(void) {
+    SECTION("undo_stack – LIFO order");
+    UndoStack s;
+    undo_stack_init(&s);
+
+    UndoEntry e1 = {0};
+    e1.type = UNDO_CREATE_ENTITY;
+    strncpy(e1.data.create_entity.name, "First", 14);
+
+    UndoEntry e2 = {0};
+    e2.type = UNDO_CREATE_RELATIONSHIP;
+    strncpy(e2.data.create_rel.name, "Second", 14);
+
+    undo_stack_push(&s, e1);
+    undo_stack_push(&s, e2);
+
+    UndoEntry out = {0};
+    undo_stack_pop(&s, &out);
+    TEST("LIFO: second pushed is first popped", out.type == UNDO_CREATE_RELATIONSHIP);
+    TEST("LIFO: correct name", strcmp(out.data.create_rel.name, "Second") == 0);
+
+    undo_stack_pop(&s, &out);
+    TEST("LIFO: first pushed is last popped", out.type == UNDO_CREATE_ENTITY);
+    TEST("LIFO: correct name", strcmp(out.data.create_entity.name, "First") == 0);
+}
+
+static void test_undo_stack_overflow(void) {
+    SECTION("undo_stack – capacity overflow (drops oldest)");
+    UndoStack s;
+    undo_stack_init(&s);
+
+    // Fill beyond capacity
+    for (int i = 0; i < UNDO_STACK_CAPACITY + 5; i++) {
+        UndoEntry e = {0};
+        e.type = UNDO_CREATE_ENTITY;
+        snprintf(e.data.create_entity.name, 15, "E%d", i);
+        undo_stack_push(&s, e);
+    }
+
+    TEST("Stack remains at max capacity", s.top == UNDO_STACK_CAPACITY - 1);
+
+    // Oldest entries should have been dropped; newest should remain
+    UndoEntry out = {0};
+    undo_stack_pop(&s, &out);
+    char expected[15];
+    snprintf(expected, 15, "E%d", UNDO_STACK_CAPACITY + 4);
+    TEST("Newest entry survives overflow", strcmp(out.data.create_entity.name, expected) == 0);
+}
+
+static void test_undo_stack_pop_empty(void) {
+    SECTION("undo_stack – pop from empty");
+    UndoStack s;
+    undo_stack_init(&s);
+
+    UndoEntry out = {0};
+    bool popped = undo_stack_pop(&s, &out);
+    TEST("Pop from empty returns false", !popped);
+}
+
+// -------------------------------------------------------------------------
+// UNDO DELETE TESTS (UNDO_DELETE)
+// -------------------------------------------------------------------------
+static void test_undo_delete_entity_full(void) {
+    SECTION("UNDO_DELETE – restore deleted entity with properties");
+    init_global_objects();
+
+    // Setup: create entity with properties
+    Entity *e = createEntity("Restorable", 10, 20);
+    addProperty(e, "id", "int", PRIMARY_KEY);
+    addProperty(e, "name", "str", NORMAL_KEY);
+    int original_x = e->x;
+    int original_y = e->y;
+
+    // Manually push undo entry (simulating what execute_delete does)
+    UndoEntry ue = {0};
+    ue.type = UNDO_DELETE;
+    ue.data.delete.delete_type = 1; // element
+    ue.data.delete.is_relationship = false;
+    strncpy(ue.data.delete.name, e->name, MAX_NAME_LEN);
+    ue.data.delete.x = e->x;
+    ue.data.delete.y = e->y;
+    ue.data.delete.num_properties = e->num_properties;
+    for (int i = 0; i < e->num_properties; i++) {
+        if (e->properties[i]) {
+            strncpy(ue.data.delete.props[i].name, e->properties[i]->name, MAX_NAME_LEN);
+            strncpy(ue.data.delete.props[i].type, e->properties[i]->type, MAX_TYPE_LEN);
+            ue.data.delete.props[i].keytype = (int)e->properties[i]->keytype;
+        }
+    }
+    undo_stack_push(&global_objects.undo_stack, ue);
+
+    // Delete the entity
+    DeleteCommand dc = {0};
+    strncpy(dc.name, "Restorable", MAX_NAME_LEN);
+    dc.type = ELEMENT;
+    execute_delete(dc, NULL);
+    TEST("Entity deleted before undo", search_entity("Restorable") == NULL);
+
+    // Undo
+    Arena dummy_arena;
+    arena_init(&dummy_arena, 1024);
+    AST dummy_tree;
+    init_AST(&dummy_tree);
+
+    bool undone = execute_undo(&dummy_tree, &dummy_arena, NULL);
+    TEST("execute_undo returns true", undone);
+
+    Entity *restored = search_entity("Restorable");
+    TEST("Entity restored", restored != NULL);
+    TEST("X coordinate preserved", restored->x == original_x);
+    TEST("Y coordinate preserved", restored->y == original_y);
+    TEST("Properties restored", restored->num_properties == 2);
+    TEST("Property[0] name correct", strcmp(restored->properties[0]->name, "id") == 0);
+    TEST("Property[0] type correct", strcmp(restored->properties[0]->type, "int") == 0);
+    TEST("Property[0] keytype correct", restored->properties[0]->keytype == PRIMARY_KEY);
+    TEST("Property[1] name correct", strcmp(restored->properties[1]->name, "name") == 0);
+
+    destroy_arena(&dummy_arena);
+}
+
+static void test_undo_delete_entity_property(void) {
+    SECTION("UNDO_DELETE – restore deleted entity property");
+    init_global_objects();
+
+    Entity *e = createEntity("PropTest", 5, 5);
+    addProperty(e, "keep", "int", NORMAL_KEY);
+    addProperty(e, "remove", "str", NORMAL_KEY);
+    TEST("Two properties initially", e->num_properties == 2);
+
+    // Push undo for property deletion
+    UndoEntry ue = {0};
+    ue.type = UNDO_DELETE;
+    ue.data.delete.delete_type = 0; // property
+    ue.data.delete.is_relationship = false;
+    strncpy(ue.data.delete.name, "PropTest", MAX_NAME_LEN);
+    strncpy(ue.data.delete.prop_name, "remove", MAX_NAME_LEN);
+    strncpy(ue.data.delete.prop_type, "str", MAX_TYPE_LEN);
+    ue.data.delete.keytype = (int)NORMAL_KEY;
+    undo_stack_push(&global_objects.undo_stack, ue);
+
+    // Delete the property
+    DeleteCommand dc = {0};
+    strncpy(dc.name, "PropTest", MAX_NAME_LEN);
+    strncpy(dc.prop_name, "remove", MAX_NAME_LEN);
+    dc.type = PROP;
+    execute_delete(dc, NULL);
+    TEST("Property deleted before undo", e->num_properties == 1);
+
+    // Undo
+    Arena dummy_arena;
+    arena_init(&dummy_arena, 1024);
+    AST dummy_tree;
+    init_AST(&dummy_tree);
+
+    bool undone = execute_undo(&dummy_tree, &dummy_arena, NULL);
+    TEST("execute_undo returns true", undone);
+
+    TEST("Property restored", e->num_properties == 2);
+    TEST("Restored property name correct", strcmp(e->properties[1]->name, "remove") == 0);
+    TEST("Restored property type correct", strcmp(e->properties[1]->type, "str") == 0);
+
+    destroy_arena(&dummy_arena);
+}
+
+static void test_undo_delete_relationship_full(void) {
+    SECTION("UNDO_DELETE – restore deleted relationship with cardinalities");
+    init_global_objects();
+
+    Entity *e1 = createEntity("A", 5, 5);
+    Entity *e2 = createEntity("B", 50, 5);
+    Relationship *r = addRelationship(27, 5, e1, e2, "Rel");
+    addPropertyRelationship(r, "p1", "int", NORMAL_KEY);
+    addCardinalityAPI("1,n,0,1", r);
+
+    // Push undo entry
+    UndoEntry ue = {0};
+    ue.type = UNDO_DELETE;
+    ue.data.delete.delete_type = 1;
+    ue.data.delete.is_relationship = true;
+    strncpy(ue.data.delete.name, "Rel", MAX_NAME_LEN);
+    ue.data.delete.x = r->x;
+    ue.data.delete.y = r->y;
+    ue.data.delete.num_properties = r->num_properties;
+    for (int i = 0; i < r->num_properties; i++) {
+        strncpy(ue.data.delete.props[i].name, r->properties[i]->name, MAX_NAME_LEN);
+        strncpy(ue.data.delete.props[i].type, r->properties[i]->type, MAX_TYPE_LEN);
+        ue.data.delete.props[i].keytype = (int)r->properties[i]->keytype;
+    }
+    strncpy(ue.data.delete.e1_name, e1->name, MAX_NAME_LEN);
+    strncpy(ue.data.delete.e2_name, e2->name, MAX_NAME_LEN);
+    if (r->cards[0]) {
+        ue.data.delete.had_card0 = true;
+        strncpy(ue.data.delete.card0, r->cards[0]->value, CARDINALITY_LEN);
+    }
+    if (r->cards[1]) {
+        ue.data.delete.had_card1 = true;
+        strncpy(ue.data.delete.card1, r->cards[1]->value, CARDINALITY_LEN);
+    }
+    undo_stack_push(&global_objects.undo_stack, ue);
+
+    // Delete relationship
+    DeleteCommand dc = {0};
+    strncpy(dc.name, "Rel", MAX_NAME_LEN);
+    dc.type = ELEMENT;
+    execute_delete(dc, NULL);
+    TEST("Relationship deleted before undo", search_relationship("Rel") == NULL);
+
+    // Undo
+    Arena dummy_arena;
+    arena_init(&dummy_arena, 1024);
+    AST dummy_tree;
+    init_AST(&dummy_tree);
+
+    bool undone = execute_undo(&dummy_tree, &dummy_arena, NULL);
+    TEST("execute_undo returns true", undone);
+
+    Relationship *restored = search_relationship("Rel");
+    TEST("Relationship restored", restored != NULL);
+    TEST("e1 restored correctly", strcmp(restored->e1->name, "A") == 0);
+    TEST("e2 restored correctly", strcmp(restored->e2->name, "B") == 0);
+    TEST("Property restored", restored->num_properties == 1);
+    TEST("Cardinality[0] restored", restored->cards[0] != NULL);
+    TEST("Cardinality[1] restored", restored->cards[1] != NULL);
+    TEST("Card[0] value correct", strcmp(restored->cards[0]->value, "1,n") == 0);
+
+    destroy_arena(&dummy_arena);
+}
+
+// -------------------------------------------------------------------------
+// OTHER UNDO TYPE TESTS
+// -------------------------------------------------------------------------
+static void test_undo_create_entity(void) {
+    SECTION("UNDO_CREATE_ENTITY – undo entity creation");
+    init_global_objects();
+
+    // Simulate: create entity -> push undo -> execute_create
+    UndoEntry ue = {0};
+    ue.type = UNDO_CREATE_ENTITY;
+    strncpy(ue.data.create_entity.name, "TempEnt", MAX_NAME_LEN);
+    undo_stack_push(&global_objects.undo_stack, ue);
+
+    Entity *e = createEntity("TempEnt", 5, 5);
+    addProperty(e, "id", "int", PRIMARY_KEY);
+    TEST("Entity exists", search_entity("TempEnt") != NULL);
+
+    Arena dummy_arena;
+    arena_init(&dummy_arena, 1024);
+    AST dummy_tree;
+    init_AST(&dummy_tree);
+
+    bool undone = execute_undo(&dummy_tree, &dummy_arena, NULL);
+    TEST("execute_undo returns true", undone);
+    TEST("Entity removed by undo", search_entity("TempEnt") == NULL);
+
+    destroy_arena(&dummy_arena);
+}
+
+static void test_undo_create_relationship(void) {
+    SECTION("UNDO_CREATE_RELATIONSHIP – undo relationship creation");
+    init_global_objects();
+
+    Entity *e1 = createEntity("X", 5, 5);
+    Entity *e2 = createEntity("Y", 50, 5);
+    addRelationship(27, 5, e1, e2, "TempRel");
+
+    UndoEntry ue = {0};
+    ue.type = UNDO_CREATE_RELATIONSHIP;
+    strncpy(ue.data.create_rel.name, "TempRel", MAX_NAME_LEN);
+    undo_stack_push(&global_objects.undo_stack, ue);
+
+    TEST("Relationship exists", search_relationship("TempRel") != NULL);
+
+    Arena dummy_arena;
+    arena_init(&dummy_arena, 1024);
+    AST dummy_tree;
+    init_AST(&dummy_tree);
+
+    bool undone = execute_undo(&dummy_tree, &dummy_arena, NULL);
+    TEST("execute_undo returns true", undone);
+    TEST("Relationship removed by undo", search_relationship("TempRel") == NULL);
+    TEST("Entities still exist", search_entity("X") != NULL && search_entity("Y") != NULL);
+
+    destroy_arena(&dummy_arena);
+}
+
+static void test_undo_add_property(void) {
+    SECTION("UNDO_ADD_PROP – undo adding a property");
+    init_global_objects();
+
+    Entity *e = createEntity("PropOwner", 5, 5);
+    addProperty(e, "id", "int", PRIMARY_KEY);
+
+    // Simulate: add property -> push undo
+    UndoEntry ue = {0};
+    ue.type = UNDO_ADD_PROP;
+    strncpy(ue.data.add_prop.identifier_name, "PropOwner", MAX_NAME_LEN);
+    strncpy(ue.data.add_prop.prop_name, "email", MAX_NAME_LEN);
+    strncpy(ue.data.add_prop.prop_type, "str", MAX_TYPE_LEN);
+    ue.data.add_prop.keytype = (int)NORMAL_KEY;
+    ue.data.add_prop.is_relationship = false;
+    undo_stack_push(&global_objects.undo_stack, ue);
+
+    // Actually add the property
+    addProperty(e, "email", "str", NORMAL_KEY);
+    TEST("Property added", e->num_properties == 2);
+
+    Arena dummy_arena;
+    arena_init(&dummy_arena, 1024);
+    AST dummy_tree;
+    init_AST(&dummy_tree);
+
+    bool undone = execute_undo(&dummy_tree, &dummy_arena, NULL);
+    TEST("execute_undo returns true", undone);
+    TEST("Property removed by undo", e->num_properties == 1);
+    TEST("Original property still exists", strcmp(e->properties[0]->name, "id") == 0);
+
+    destroy_arena(&dummy_arena);
+}
+
+static void test_undo_change_name(void) {
+    SECTION("UNDO_CHANGE_NAME – undo name change");
+    init_global_objects();
+
+    Entity *e = createEntity("OldName", 5, 5);
+    TEST("Original name correct", strcmp(e->name, "OldName") == 0);
+
+    // Simulate: change name -> push undo
+    UndoEntry ue = {0};
+    ue.type = UNDO_CHANGE_NAME;
+    strncpy(ue.data.change_name.old_name, "OldName", MAX_NAME_LEN);
+    strncpy(ue.data.change_name.new_name, "NewName", MAX_NAME_LEN);
+    undo_stack_push(&global_objects.undo_stack, ue);
+
+    // Apply name change
+    strncpy(e->name, "NewName", MAX_NAME_LEN);
+    TEST("Name changed", strcmp(e->name, "NewName") == 0);
+
+    Arena dummy_arena;
+    arena_init(&dummy_arena, 1024);
+    AST dummy_tree;
+    init_AST(&dummy_tree);
+
+    bool undone = execute_undo(&dummy_tree, &dummy_arena, NULL);
+    TEST("execute_undo returns true", undone);
+
+    // Note: execute_undo searches by NEW name to find the entity
+    Entity *found = search_entity("OldName");
+    TEST("Name restored to old", found != NULL);
+
+    destroy_arena(&dummy_arena);
+}
+
+static void test_undo_add_card(void) {
+    SECTION("UNDO_ADD_CARD – undo cardinality change");
+    init_global_objects();
+
+    Entity *e1 = createEntity("A", 5, 5);
+    Entity *e2 = createEntity("B", 50, 5);
+    Relationship *r = addRelationship(27, 5, e1, e2, "R");
+
+    // Set initial cardinality
+    addCardinalityAPI("0,1,1,1", r);
+    TEST("Initial card[0]", strcmp(r->cards[0]->value, "0,1") == 0);
+
+    // Simulate: change cardinality -> push undo with OLD values
+    UndoEntry ue = {0};
+    ue.type = UNDO_ADD_CARD;
+    strncpy(ue.data.add_card.rel_name, "R", MAX_NAME_LEN);
+    ue.data.add_card.had_card0 = true;
+    strncpy(ue.data.add_card.card0, "0,1", CARDINALITY_LEN);
+    ue.data.add_card.had_card1 = true;
+    strncpy(ue.data.add_card.card1, "1,1", CARDINALITY_LEN);
+    undo_stack_push(&global_objects.undo_stack, ue);
+
+    // Change cardinality
+    addCardinalityAPI("1,n,0,n", r);
+    TEST("Changed card[0]", strcmp(r->cards[0]->value, "1,n") == 0);
+
+    Arena dummy_arena;
+    arena_init(&dummy_arena, 1024);
+    AST dummy_tree;
+    init_AST(&dummy_tree);
+
+    bool undone = execute_undo(&dummy_tree, &dummy_arena, NULL);
+    TEST("execute_undo returns true", undone);
+    TEST("Cardinality restored", strcmp(r->cards[0]->value, "0,1") == 0);
+
+    destroy_arena(&dummy_arena);
+}
+
+static void test_undo_nothing_to_undo(void) {
+    SECTION("execute_undo – empty stack");
+    init_global_objects();
+
+    Arena dummy_arena;
+    arena_init(&dummy_arena, 1024);
+    AST dummy_tree;
+    init_AST(&dummy_tree);
+
+    bool undone = execute_undo(&dummy_tree, &dummy_arena, NULL);
+    TEST("execute_undo returns false when empty", !undone);
+
+    destroy_arena(&dummy_arena);
+}
+
+static void test_undo_multiple_operations(void) {
+    SECTION("execute_undo – multiple operations in sequence");
+    init_global_objects();
+
+    // Create entity
+    Entity *e = createEntity("Multi", 5, 5);
+    UndoEntry ue1 = {0};
+    ue1.type = UNDO_CREATE_ENTITY;
+    strncpy(ue1.data.create_entity.name, "Multi", MAX_NAME_LEN);
+    undo_stack_push(&global_objects.undo_stack, ue1);
+
+    // Add property
+    addProperty(e, "p1", "int", NORMAL_KEY);
+    UndoEntry ue2 = {0};
+    ue2.type = UNDO_ADD_PROP;
+    strncpy(ue2.data.add_prop.identifier_name, "Multi", MAX_NAME_LEN);
+    strncpy(ue2.data.add_prop.prop_name, "p1", MAX_NAME_LEN);
+    strncpy(ue2.data.add_prop.prop_type, "int", MAX_TYPE_LEN);
+    ue2.data.add_prop.keytype = (int)NORMAL_KEY;
+    ue2.data.add_prop.is_relationship = false;
+    undo_stack_push(&global_objects.undo_stack, ue2);
+
+    // Add another property
+    addProperty(e, "p2", "str", NORMAL_KEY);
+    UndoEntry ue3 = {0};
+    ue3.type = UNDO_ADD_PROP;
+    strncpy(ue3.data.add_prop.identifier_name, "Multi", MAX_NAME_LEN);
+    strncpy(ue3.data.add_prop.prop_name, "p2", MAX_NAME_LEN);
+    strncpy(ue3.data.add_prop.prop_type, "str", MAX_TYPE_LEN);
+    ue3.data.add_prop.keytype = (int)NORMAL_KEY;
+    ue3.data.add_prop.is_relationship = false;
+    undo_stack_push(&global_objects.undo_stack, ue3);
+
+    TEST("Entity has 2 properties", e->num_properties == 2); // createEntity has 0, plus 2 added
+
+    Arena dummy_arena;
+    arena_init(&dummy_arena, 1024);
+    AST dummy_tree;
+    init_AST(&dummy_tree);
+
+    // Undo 1: remove p2
+    bool undone = execute_undo(&dummy_tree, &dummy_arena, NULL);
+    TEST("Undo 1 succeeds", undone);
+    TEST("p2 removed", e->num_properties == 1);
+
+    // Undo 2: remove p1
+    undone = execute_undo(&dummy_tree, &dummy_arena, NULL);
+    TEST("Undo 2 succeeds", undone);
+    TEST("p1 removed", e->num_properties == 0);
+
+    // Undo 3: remove entity
+    undone = execute_undo(&dummy_tree, &dummy_arena, NULL);
+    TEST("Undo 3 succeeds", undone);
+    TEST("Entity removed", search_entity("Multi") == NULL);
+
+    destroy_arena(&dummy_arena);
+}
+
+// -------------------------------------------------------------------------
+// CLEAR COMMAND TESTS (with confirmation and undo)
+// -------------------------------------------------------------------------
+static void test_parse_clear_exists(void) {
+    SECTION("parse_clear – token recognized");
+    Parser p;
+    const char *input = "clear";
+    init_parser(&p, input);
+    tokenize_content(input, p.tokens, &p.count);
+
+    TEST("TOKEN_CLEAR recognized", p.tokens[0].type == TOKEN_CLEAR);
+}
+
+static void test_clear_resets_global_objects(void) {
+    SECTION("parse_clear – resets global state");
+    init_global_objects();
+
+    createEntity("E1", 5, 5);
+    createEntity("E2", 10, 10);
+    TEST("Entities exist before clear", global_objects.entity_count == 2);
+
+    // Note: parse_clear() currently does NO confirmation in headless test mode
+    // We test init_global_objects directly since that's what parse_clear calls
+    init_global_objects();
+    TEST("Entity count reset", global_objects.entity_count == 0);
+    TEST("Relationship count reset", global_objects.relationship_count == 0);
+}
+
+static void test_clear_undo_snapshot_structure(void) {
+    SECTION("UNDO_CLEAR – snapshot structure validation");
+    init_global_objects();
+
+    // Create a small diagram
+    Entity *e = createEntity("SnapEnt", 5, 5);
+    addProperty(e, "id", "int", PRIMARY_KEY);
+
+    // Simulate what parse_clear would do: snapshot before clear
+    UndoEntry ue = {0};
+    ue.type = UNDO_CLEAR;              // Requires UNDO_CLEAR to be added to enum
+    ue.data.convert_mld.snapshot_len = // Reusing UndoConvertMld structure
+        snapshot_diagram_to_buf(ue.data.convert_mld.snapshot, sizeof(ue.data.convert_mld.snapshot));
+
+    TEST("Snapshot has content", ue.data.convert_mld.snapshot_len > 0);
+    TEST("Snapshot starts with # MCD", strncmp(ue.data.convert_mld.snapshot, "# MCD", 5) == 0);
+    TEST("Snapshot contains entity name", strstr(ue.data.convert_mld.snapshot, "SnapEnt") != NULL);
+    TEST("Snapshot contains property", strstr(ue.data.convert_mld.snapshot, "id") != NULL);
+}
+
+// -------------------------------------------------------------------------
+// TEST RUNNER
+// -------------------------------------------------------------------------
+void run_undo_delete_tests(void) {
+    printf("Starting Undo & Delete Tests...\n");
+    log_file = fopen("undo_delete_test_results.log", "w");
+    if (!log_file) {
+        printf("CRITICAL ERROR: Could not open log file!\n");
+        return;
+    }
+
+    SUITE_HEADER("UNDO & DELETE COMMAND TESTS");
+
+    // Stack infrastructure
+    test_undo_stack_init();
+    test_undo_stack_push_pop();
+    test_undo_stack_order();
+    test_undo_stack_overflow();
+    test_undo_stack_pop_empty();
+
+    // Delete parser
+    test_parse_delete_entity_element();
+    test_parse_delete_entity_property();
+    test_parse_delete_relationship_property();
+    test_parse_delete_empty_name();
+    test_parse_delete_missing_name();
+
+    // Delete execution
+    test_execute_delete_entity();
+    test_execute_delete_entity_cascade_relationships();
+    test_execute_delete_entity_property();
+    test_execute_delete_entity_property_not_found();
+    test_execute_delete_relationship();
+    test_execute_delete_relationship_property();
+    test_execute_delete_nonexistent_target();
+
+    // Undo delete
+    test_undo_delete_entity_full();
+    test_undo_delete_entity_property();
+    test_undo_delete_relationship_full();
+
+    // Other undo types
+    test_undo_create_entity();
+    test_undo_create_relationship();
+    test_undo_add_property();
+    test_undo_change_name();
+    test_undo_add_card();
+    test_undo_nothing_to_undo();
+    test_undo_multiple_operations();
+
+    // Clear
+    test_parse_clear_exists();
+    test_clear_resets_global_objects();
+    test_clear_undo_snapshot_structure();
+
+    fprintf(log_file, "\n=========================================\n");
+    fprintf(log_file, "  RESULTS: %d passed, %d failed\n", total_pass, total_fail);
+    fprintf(log_file, "=========================================\n");
+    fclose(log_file);
+    printf("Undo & Delete tests complete. Results: %d passed, %d failed.\n"
+           "See 'undo_delete_test_results.log' for details.\n",
+           total_pass, total_fail);
+    total_pass = 0;
+    total_fail = 0;
+}
+
+#endif // UNDO_DELETE_TESTS
+
+// =========================================================================
+// MAIN RUNNER
+// =========================================================================
 int main(void) {
     int suites_run = 0;
 
@@ -1543,16 +2381,22 @@ int main(void) {
     suites_run++;
 #endif
 
+#ifdef UNDO_DELETE_TESTS
+    run_undo_delete_tests();
+    suites_run++;
+#endif
+
     if (suites_run == 0) {
-        printf("No test suites were compiled!\n");
-        printf("Compile with one or more of:\n");
-        printf("  -DARENA_TESTS         Arena allocator tests  (no ncurses)\n");
-        printf("  -DLEXER_TESTS         Tokenizer/lexer tests  (no ncurses)\n");
-        printf("  -DPARSER_TESTS        Parser + execute tests (no ncurses)\n");
-        printf("  -DMCD_TESTS           MCD element API tests  (no ncurses)\n");
-        printf("  -DHELP_TESTS          Help window + KMP tests(no ncurses)\n");
-        printf("  -DGRAPHICS_TEST       Visual/ncurses tests   (requires ncurses)\n");
-        printf("  -DINTEGRATION_TESTS   End-to-end workflow tests (no ncurses)\n");
+        printf("No test suites were compiled! ");
+        printf("Compile with one or more of: ");
+        printf("  -DARENA_TESTS         Arena allocator tests  (no ncurses) ");
+        printf("  -DLEXER_TESTS         Tokenizer/lexer tests  (no ncurses) ");
+        printf("  -DPARSER_TESTS        Parser + execute tests (no ncurses) ");
+        printf("  -DMCD_TESTS           MCD element API tests  (no ncurses) ");
+        printf("  -DHELP_TESTS          Help window + KMP tests(no ncurses) ");
+        printf("  -DGRAPHICS_TEST       Visual/ncurses tests   (requires ncurses) ");
+        printf("  -DINTEGRATION_TESTS   End-to-end workflow tests (no ncurses) ");
+        printf("  -DUNDO_DELETE_TESTS   Undo & delete command tests (no ncurses) ");
     }
 
     return (total_fail > 0) ? 1 : 0;

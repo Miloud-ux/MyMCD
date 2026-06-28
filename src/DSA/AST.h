@@ -69,8 +69,12 @@ typedef struct {
         char new_name[MAX_NAME_LEN];
 } ChangeNameCommand;
 
+typedef enum { PROP, ELEMENT } DeleteType;
+
 typedef struct {
         char name[MAX_NAME_LEN];
+        char prop_name[MAX_NAME_LEN];
+        DeleteType type;
 } DeleteCommand;
 
 // Stores the diagram type and output filename for a "save MCD|MLD "file";" command.
@@ -78,6 +82,28 @@ typedef struct {
         DiagramType diagram_type;
         char filename[MAX_FILENAME_LEN];
 } SaveCommand;
+
+// UNDO COMMANDS
+
+typedef enum {
+    UNDO_ADD_PROP,
+    UNDO_CREATE_ENTITY,
+    UNDO_CREATE_RELATIONSHIP,
+    UNDO_CHANGE_NAME,
+    UNDO_CONVERT_MLD,
+    UNDO_ADD_CARD,
+    UNDO_SAVE,
+    UNDO_DELETE,
+    UNDO_CLEAR
+} UndoType;
+
+typedef struct {
+
+} UndoAddPropCommmand;
+
+typedef struct {
+        UndoType type;
+} UndoCommand;
 
 typedef union {
         AddCommand add_command;

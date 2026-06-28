@@ -50,9 +50,8 @@ bool parse_change_name_value(Parser *p, WINDOW *console, ChangeNameCommand *c);
 bool execute_changeName(ChangeNameCommand c, WINDOW *console_win);
 
 // Delete command
-// Parses:  delete "name"
-// Fills:   DeleteCommand.name
 bool parse_delete(Parser *p, WINDOW *console, DeleteCommand *c);
+bool parse_delete_element(Parser *p, WINDOW *console, DeleteCommand *c);
 // Looks up the name as an entity, then a relationship, and removes it
 // (deleting an entity also removes any relationship still attached to it)
 bool execute_delete(DeleteCommand c, WINDOW *console_win);
@@ -64,9 +63,15 @@ bool parse_save(Parser *p, WINDOW *console, SaveCommand *c);
 // Delegates to save_diagram() in utils/save.c
 bool execute_save(SaveCommand c, WINDOW *console_win);
 
-// clear command
-void parse_clear();
+// Undo command
+// Pops the top UndoEntry from global_objects.undo_stack and reverses it.
+// Returns true if something was undone, false if stack was empty.
+// For UNDO_CONVERT_MLD the snapshot stored in the entry is replayed via
+// execute_command
+bool execute_undo(AST *tree, Arena *a, WINDOW *console_win);
 
+// clear command
+bool parse_clear(WINDOW *console_win, AST *tree, Arena *a);
 // display commands
 void show_msg(WINDOW *console_win, const char *msg, const char *severity);
 

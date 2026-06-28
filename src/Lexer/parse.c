@@ -177,6 +177,18 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
                     cmd->type = CREATE;
                     cmd->cmds.create_command = c;
                     add_ast_node(a, tree, cmd);
+
+                    // Push the inverse onto the undo stack so the user can
+                    // undo this creation by deleting the entity/relationship
+                    UndoEntry ue = {0};
+                    if (c.type == TYPE_ENTITY) {
+                        ue.type = UNDO_CREATE_ENTITY;
+                        strncpy(ue.data.create_entity.name, c.Data.e.name, MAX_NAME_LEN - 1);
+                    } else {
+                        ue.type = UNDO_CREATE_RELATIONSHIP;
+                        strncpy(ue.data.create_rel.name, c.Data.r.name, MAX_NAME_LEN - 1);
+                    }
+                    undo_stack_push(&global_objects.undo_stack, ue);
                 } else {
                     error_msg_ex(console_win, p, ERR_RUNTIME, "Could not create the entity/relationship",
                                  "entity/relationship already exists or faced a memory issue");
@@ -196,18 +208,51 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
                         cmd->type = ADD;
                         cmd->cmds.add_command = c;
                         add_ast_node(a, tree, cmd);
+
+                        // Record which element type this property was added to
+                        // so execute_undo knows whether to search entities or
+                        // relationships when removing it
+                        Element *el = get_element_by_name(c.identifier_name);
+                        UndoEntry ue = {0};
+                        ue.type = UNDO_ADD_PROP;
+                        strncpy(ue.data.add_prop.identifier_name, c.identifier_name, MAX_NAME_LEN - 1);
+                        strncpy(ue.data.add_prop.prop_name, c.Data.p.prop_name, MAX_NAME_LEN - 1);
+                        strncpy(ue.data.add_prop.prop_type, c.Data.p.prop_type, MAX_TYPE_LEN - 1);
+                        ue.data.add_prop.keytype = (int)c.Data.p.type;
+                        ue.data.add_prop.is_relationship = (el && el->type == TYPE_RELATIONSHIP);
+                        if (el)
+                            free(el);
+                        undo_stack_push(&global_objects.undo_stack, ue);
                     } else {
                         error_msg_ex(console_win, p, ERR_RUNTIME, "Could not add the property",
                                      "entity/relationship not found, or property already exists");
                         break;
                     }
                 } else if (c.type == TYPE_CARDINALITY) {
+                    // Capture the cardinalities that are about to be overwritten
+                    // before calling execute_addCardinality so the undo entry
+                    // stores the previous state, not the new one
+                    Relationship *r_before = search_relationship(c.identifier_name);
+                    UndoEntry ue = {0};
+                    ue.type = UNDO_ADD_CARD;
+                    strncpy(ue.data.add_card.rel_name, c.identifier_name, MAX_NAME_LEN - 1);
+                    if (r_before && r_before->cards[0]) {
+                        ue.data.add_card.had_card0 = true;
+                        strncpy(ue.data.add_card.card0, r_before->cards[0]->value, CARDINALITY_LEN - 1);
+                    }
+                    if (r_before && r_before->cards[1]) {
+                        ue.data.add_card.had_card1 = true;
+                        strncpy(ue.data.add_card.card1, r_before->cards[1]->value, CARDINALITY_LEN - 1);
+                    }
+
                     if (execute_addCardinality(c, console_win)) {
                         // Sucess
                         Command *cmd = ARENA_PUSH_OBJECT(a, Command);
                         cmd->type = ADD;
                         cmd->cmds.add_command = c;
                         add_ast_node(a, tree, cmd);
+
+                        undo_stack_push(&global_objects.undo_stack, ue);
                     } else {
                         // Update => replaced the generic "for some reason ??" message
                         // with error_msg_ex(): labels this a runtime error and adds a
@@ -235,6 +280,16 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
             advance_token(&p->current);
             if (parse_convert(p, console_win, &c)) {
                 if (c.type == MLD) {
+                    // Take a full snapshot of the MCD state before converting
+                    // so the user can restore it with undo.  snapshot_diagram_to_buf
+                    // writes directly into the UndoEntry's fixed buffer using
+                    // only snprintf — no heap alloc, works on Windows and Linux.
+                    UndoEntry ue = {0};
+                    ue.type = UNDO_CONVERT_MLD;
+                    ue.data.convert_mld.snapshot_len =
+                        snapshot_diagram_to_buf(ue.data.convert_mld.snapshot, sizeof(ue.data.convert_mld.snapshot));
+                    undo_stack_push(&global_objects.undo_stack, ue);
+
                     if (convert_to_mld(console_win)) {
                         Command *cmd = ARENA_PUSH_OBJECT(a, Command);
                         cmd->type = CONVERT;
@@ -253,6 +308,13 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
                     cmd->cmds.change_name_command = c;
                     add_ast_node(a, tree, cmd);
                     show_msg(console_win, "Name changed succesfully", "UPDATE");
+
+                    // The inverse of "change name A -> B" is "change name B -> A"
+                    UndoEntry ue = {0};
+                    ue.type = UNDO_CHANGE_NAME;
+                    strncpy(ue.data.change_name.old_name, c.old_name, MAX_NAME_LEN - 1);
+                    strncpy(ue.data.change_name.new_name, c.new_name, MAX_NAME_LEN - 1);
+                    undo_stack_push(&global_objects.undo_stack, ue);
                 } else {
                     error_msg_ex(console_win, p, ERR_RUNTIME, "Could not change the name",
                                  "no entity/relationship with that name, or the new name is already taken");
@@ -281,7 +343,10 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
             }
         } else if (t.type == TOKEN_CLEAR) {
             advance_token(&p->current);
-            parse_clear();
+            if (parse_clear(console_win, tree, a)) {
+                // Clear succeeded — nothing to add to AST, but undo is already pushed
+                show_msg(console_win, "Diagram cleared", "UPDATE");
+            }
         } else if (t.type == TOKEN_SAVE) {
             SaveCommand c = {0};
             advance_token(&p->current);
@@ -299,6 +364,11 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
             } else {
                 return false;
             }
+        } else if (t.type == TOKEN_UNDO) {
+            advance_token(&p->current);
+            if (execute_undo(tree, a, console_win)) {
+                // undo succeeded caller will set needs_redraw
+            }
         } else if (t.type == TOKEN_EOF) {
             break;
         } else if (t.type == TOKEN_UNKNOWN) {
@@ -312,7 +382,8 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
 
             return false;
         } else {
-            const char *error = "Unknown command try : {create, add, card, convert, change, save, delete, help, clear}";
+            const char *error =
+                "Unknown command try : {create, add, card, convert, change, save, delete, undo, help, clear}";
             error_msg(console_win, p, error);
             return false;
         }
@@ -619,7 +690,58 @@ Element *get_element_by_name(const char *name) {
     }
 }
 
-void parse_clear() { init_global_objects(); }
+static bool confirm_yes_no(WINDOW *console_win, const char *prompt) {
+    wmove(console_win, 1, 1);
+    wclrtoeol(console_win);
+    wmove(console_win, 2, 1);
+    wclrtoeol(console_win);
+    wmove(console_win, 3, 1);
+    wclrtoeol(console_win);
+
+    wattron(console_win, COLOR_PAIR(3));
+    mvwprintw(console_win, 1, 1, "[CONFIRM]: ");
+    wattroff(console_win, COLOR_PAIR(3));
+    mvwprintw(console_win, 1, 12, "%s", prompt);
+    mvwprintw(console_win, 2, 1, "> (y/n): ");
+    wrefresh(console_win);
+
+    // Block for a single keypress, then restore non-blocking mode
+    timeout(-1);
+    int ch = getch();
+    timeout(16);
+
+    // Clear the prompt area
+    wmove(console_win, 1, 1);
+    wclrtoeol(console_win);
+    wmove(console_win, 2, 1);
+    wclrtoeol(console_win);
+    wmove(console_win, 3, 1);
+    wclrtoeol(console_win);
+    wrefresh(console_win);
+
+    return (ch == 'y' || ch == 'Y');
+}
+
+bool parse_clear(WINDOW *console_win, AST *tree, Arena *a) {
+    if (!confirm_yes_no(console_win, "Clear entire diagram? This cannot be undone except with 'undo'.")) {
+        show_msg(console_win, "Clear cancelled", "INFO");
+        return false;
+    }
+
+    // Snapshot the current state BEFORE clearing, so undo can restore it
+    UndoEntry ue = {0};
+    ue.type = UNDO_CLEAR;
+    ue.data.clear.snapshot_len = snapshot_diagram_to_buf(ue.data.clear.snapshot, sizeof(ue.data.clear.snapshot));
+
+    // Now clear everything
+    init_global_objects();
+
+    // Also clear the AST since those commands no longer reflect reality
+    init_AST(tree);
+
+    undo_stack_push(&global_objects.undo_stack, ue);
+    return true;
+}
 
 bool parse_add_cardinality(Parser *p, WINDOW *console, AddCommand *c) {
     Token t = peek_token(p->tokens, p->current);
@@ -855,6 +977,7 @@ bool execute_changeName(ChangeNameCommand c, WINDOW *console_win) {
     }
     return true;
 }
+
 bool parse_delete(Parser *p, WINDOW *console, DeleteCommand *c) {
     Token t = peek_token(p->tokens, p->current);
     if (t.type == TOKEN_STRING) {
@@ -866,9 +989,38 @@ bool parse_delete(Parser *p, WINDOW *console, DeleteCommand *c) {
         strncpy(c->name, t.value, MAX_NAME_LEN);
         c->name[MAX_NAME_LEN - 1] = '\0';
         advance_token(&p->current);
-        return true;
+        if (parse_delete_element(p, console, c)) {
+            return true;
+        }
+
     } else {
         const char *error = "Expected the entity/relationship name to delete";
+        error_msg(console, p, error);
+    }
+    return false;
+}
+
+bool parse_delete_element(Parser *p, WINDOW *console, DeleteCommand *c) {
+    Token t = peek_token(p->tokens, p->current);
+    if (t.type == 0) {
+        // No property provided (defaults to deleting the whole element Entity/Relationship)
+        c->type = ELEMENT;
+        return true;
+    } else if (t.type == TOKEN_STRING) {
+        // Delete a property
+
+        if (strlen(t.value) == 0) {
+            const char *error = "Empty property name";
+            error_msg(console, p, error);
+            return false;
+        }
+
+        c->type = PROP;
+        strncpy(c->prop_name, t.value, MAX_NAME_LEN);
+        advance_token(&p->current);
+        return true;
+    } else {
+        const char *error = "Expected Either nothing (delete the entity/relationship) or a property name";
         error_msg(console, p, error);
     }
     return false;
@@ -877,27 +1029,125 @@ bool parse_delete(Parser *p, WINDOW *console, DeleteCommand *c) {
 bool execute_delete(DeleteCommand c, WINDOW *console_win) {
     Entity *e = search_entity(c.name);
     if (e) {
-        int removed = 0;
-        for (int i = global_objects.relationship_count - 1; i >= 0; i--) {
-            Relationship *r = global_objects.relationships[i];
-            if (r && (r->e1 == e || r->e2 == e)) {
-                unregister_relationship(r);
-                removed++;
+        if (c.type == ELEMENT) {
+            UndoEntry ue = {0};
+            ue.type = UNDO_DELETE;
+            ue.data.delete.delete_type = 1;
+            ue.data.delete.is_relationship = false;
+            strncpy(ue.data.delete.name, e->name, MAX_NAME_LEN);
+            ue.data.delete.x = e->x;
+            ue.data.delete.y = e->y;
+            ue.data.delete.num_properties = e->num_properties;
+            for (int i = 0; i < e->num_properties; i++) {
+                if (e->properties[i]) {
+                    strncpy(ue.data.delete.props[i].name, e->properties[i]->name, MAX_NAME_LEN);
+                    strncpy(ue.data.delete.props[i].type, e->properties[i]->type, MAX_TYPE_LEN);
+                    ue.data.delete.props[i].keytype = (int)e->properties[i]->keytype;
+                }
             }
+            undo_stack_push(&global_objects.undo_stack, ue);
+
+            int removed = 0;
+            for (int i = global_objects.relationship_count - 1; i >= 0; i--) {
+                Relationship *r = global_objects.relationships[i];
+                if (r && (r->e1 == e || r->e2 == e)) {
+                    unregister_relationship(r);
+                    removed++;
+                }
+            }
+            if (removed > 0) {
+                char msg[128];
+                snprintf(msg, sizeof(msg), "Also removed %d relationship(s) attached to \"%s\"", removed, e->name);
+                show_msg(console_win, msg, "INFO");
+            }
+            unregister_entity(e);
+            return true;
+        } else if (c.type == PROP) {
+            for (int i = 0; i < e->num_properties; i++) {
+                if (e->properties[i] && mcd_strcasecmp(c.prop_name, e->properties[i]->name) == 0) {
+                    UndoEntry ue = {0};
+                    ue.type = UNDO_DELETE;
+                    ue.data.delete.delete_type = 0;
+                    ue.data.delete.is_relationship = false;
+                    strncpy(ue.data.delete.name, e->name, MAX_NAME_LEN);
+                    strncpy(ue.data.delete.prop_name, e->properties[i]->name, MAX_NAME_LEN);
+                    strncpy(ue.data.delete.prop_type, e->properties[i]->type, MAX_TYPE_LEN);
+                    ue.data.delete.keytype = (int)e->properties[i]->keytype;
+                    undo_stack_push(&global_objects.undo_stack, ue);
+
+                    free(e->properties[i]);
+                    for (int j = i; j < e->num_properties - 1; j++) {
+                        e->properties[j] = e->properties[j + 1];
+                    }
+                    e->properties[--e->num_properties] = NULL;
+                    e->height -= 1;
+                    return true;
+                }
+            }
+            return false;
         }
-        if (removed > 0) {
-            char msg[128];
-            snprintf(msg, sizeof(msg), "Also removed %d relationship(s) attached to \"%s\"", removed, e->name);
-            show_msg(console_win, msg, "INFO");
-        }
-        unregister_entity(e);
-        return true;
     }
 
     Relationship *r = search_relationship(c.name);
     if (r) {
-        unregister_relationship(r);
-        return true;
+        if (c.type == ELEMENT) {
+            UndoEntry ue = {0};
+            ue.type = UNDO_DELETE;
+            ue.data.delete.delete_type = 1;
+            ue.data.delete.is_relationship = true;
+            strncpy(ue.data.delete.name, r->name, MAX_NAME_LEN);
+            ue.data.delete.x = r->x;
+            ue.data.delete.y = r->y;
+            ue.data.delete.num_properties = r->num_properties;
+            for (int i = 0; i < r->num_properties; i++) {
+                if (r->properties[i]) {
+                    strncpy(ue.data.delete.props[i].name, r->properties[i]->name, MAX_NAME_LEN);
+                    strncpy(ue.data.delete.props[i].type, r->properties[i]->type, MAX_TYPE_LEN);
+                    ue.data.delete.props[i].keytype = (int)r->properties[i]->keytype;
+                }
+            }
+            if (r->e1) {
+                strncpy(ue.data.delete.e1_name, r->e1->name, MAX_NAME_LEN);
+            }
+            if (r->e2) {
+                strncpy(ue.data.delete.e2_name, r->e2->name, MAX_NAME_LEN);
+            }
+            if (r->cards[0]) {
+                ue.data.delete.had_card0 = true;
+                strncpy(ue.data.delete.card0, r->cards[0]->value, CARDINALITY_LEN);
+            }
+            if (r->cards[1]) {
+                ue.data.delete.had_card1 = true;
+                strncpy(ue.data.delete.card1, r->cards[1]->value, CARDINALITY_LEN);
+            }
+            undo_stack_push(&global_objects.undo_stack, ue);
+
+            unregister_relationship(r);
+            return true;
+        } else if (c.type == PROP) {
+            for (int i = 0; i < r->num_properties; i++) {
+                if (r->properties[i] && mcd_strcasecmp(c.prop_name, r->properties[i]->name) == 0) {
+                    UndoEntry ue = {0};
+                    ue.type = UNDO_DELETE;
+                    ue.data.delete.delete_type = 0;
+                    ue.data.delete.is_relationship = true;
+                    strncpy(ue.data.delete.name, r->name, MAX_NAME_LEN);
+                    strncpy(ue.data.delete.prop_name, r->properties[i]->name, MAX_NAME_LEN);
+                    strncpy(ue.data.delete.prop_type, r->properties[i]->type, MAX_TYPE_LEN);
+                    ue.data.delete.keytype = (int)r->properties[i]->keytype;
+                    undo_stack_push(&global_objects.undo_stack, ue);
+
+                    free(r->properties[i]);
+                    for (int j = i; j < r->num_properties - 1; j++) {
+                        r->properties[j] = r->properties[j + 1];
+                    }
+                    r->properties[--r->num_properties] = NULL;
+                    r->height -= 1;
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     return false;
@@ -1029,7 +1279,11 @@ static bool create_junction_entity(Relationship *r, Entity *e1, Entity *e2) {
 bool convert_to_mld(WINDOW *console_win) {
     bool had_skipped = false;
 
-    for (int i = 0; i < global_objects.relationship_count; i++) {
+    // traverse backwards because relationships are getting
+    // shifted when deleted which means we are missing some
+    // check global_objects.c file to understand the
+    // unregister relationship implementation
+    for (int i = global_objects.relationship_count - 1; i >= 0; i--) {
         Relationship *r = global_objects.relationships[i];
         if (!r) {
             continue;
@@ -1145,4 +1399,279 @@ bool execute_save(SaveCommand c, WINDOW *console_win) {
     }
 
     return save_diagram(c.filename, c.diagram_type, console_win);
+}
+
+// For MLD undo: write snapshot to a tmpfile and load it back.
+// tmpfile() is standard C89 and works on both Windows and Linux.
+static bool save_snapshot_to_tmpfile(char *buf, size_t len, FILE **out_fp) {
+    FILE *fp = tmpfile();
+    if (!fp)
+        return false;
+    if (fwrite(buf, 1, len, fp) != len) {
+        fclose(fp);
+        return false;
+    }
+    rewind(fp);
+    *out_fp = fp;
+    return true;
+}
+
+// Restores the diagram from a snapshot buffer produced by snapshot_diagram_to_buf.
+// Uses a tmpfile so load_diagram can slurp it back in.  Clears global_objects first.
+static void restore_from_snapshot(const char *buf, size_t len, AST *tree, Arena *a, WINDOW *console_win) {
+    init_global_objects();
+
+    FILE *fp = NULL;
+    if (!save_snapshot_to_tmpfile((char *)buf, len, &fp)) {
+        show_msg(console_win, "Undo MLD failed: could not create temp file", "WARNING");
+        return;
+    }
+
+    // Build a temp filename from the FILE* — load_diagram needs a path.
+    // tmpfile() gives us a FILE* but no name.  Instead, use a named temp
+    // file with mkstemp / tmpnam.  Actually, simpler: write to a fixed
+    // temp name in current dir, load it, then delete it.
+    fclose(fp);
+
+    // Simpler approach: just write to ".mcd_undo_tmp.txt", load, then remove.
+    const char *tmpname = ".mcd_undo_tmp.txt";
+    FILE *w = fopen(tmpname, "w");
+    if (!w) {
+        show_msg(console_win, "Undo MLD failed: could not write temp file", "WARNING");
+        return;
+    }
+    fwrite(buf, 1, len, w);
+    fclose(w);
+
+    bool dummy = false;
+    load_diagram(tmpname, a, tree, console_win, &dummy);
+    remove(tmpname);
+
+    // Prevent the restored commands from being individually undoable
+    undo_stack_init(&global_objects.undo_stack);
+}
+
+bool execute_undo(AST *tree, Arena *a, WINDOW *console_win) {
+    UndoEntry entry;
+    if (!undo_stack_pop(&global_objects.undo_stack, &entry)) {
+        show_msg(console_win, "Nothing to undo", "INFO");
+        return false;
+    }
+
+    switch (entry.type) {
+
+    case UNDO_CREATE_ENTITY: {
+        Entity *e = search_entity(entry.data.create_entity.name);
+        if (!e)
+            return false;
+        // also clean up any relationships that were created after this entity
+        // and happen to still reference it
+        for (int i = global_objects.relationship_count - 1; i >= 0; i--) {
+            Relationship *r = global_objects.relationships[i];
+            if (r && (r->e1 == e || r->e2 == e)) {
+                unregister_relationship(r);
+            }
+        }
+        unregister_entity(e);
+        show_msg(console_win, "Undid: create entity", "UPDATE");
+        return true;
+    }
+
+    case UNDO_CREATE_RELATIONSHIP: {
+        Relationship *r = search_relationship(entry.data.create_rel.name);
+        if (!r)
+            return false;
+        unregister_relationship(r);
+        show_msg(console_win, "Undid: create relationship", "UPDATE");
+        return true;
+    }
+
+    case UNDO_ADD_PROP: {
+        const char *id = entry.data.add_prop.identifier_name;
+        const char *pname = entry.data.add_prop.prop_name;
+        if (entry.data.add_prop.is_relationship) {
+            Relationship *r = search_relationship(id);
+            if (!r)
+                return false;
+            for (int i = 0; i < r->num_properties; i++) {
+                if (r->properties[i] && mcd_strcasecmp(r->properties[i]->name, pname) == 0) {
+                    free(r->properties[i]);
+                    for (int j = i; j < r->num_properties - 1; j++)
+                        r->properties[j] = r->properties[j + 1];
+                    r->properties[--r->num_properties] = NULL;
+                    r->height -= 1;
+                    break;
+                }
+            }
+        } else {
+            Entity *e = search_entity(id);
+            if (!e)
+                return false;
+            for (int i = 0; i < e->num_properties; i++) {
+                if (e->properties[i] && mcd_strcasecmp(e->properties[i]->name, pname) == 0) {
+                    free(e->properties[i]);
+                    for (int j = i; j < e->num_properties - 1; j++)
+                        e->properties[j] = e->properties[j + 1];
+                    e->properties[--e->num_properties] = NULL;
+                    e->height -= 1;
+                    break;
+                }
+            }
+        }
+        show_msg(console_win, "Undid: add property", "UPDATE");
+        return true;
+    }
+
+    case UNDO_ADD_CARD: {
+        Relationship *r = search_relationship(entry.data.add_card.rel_name);
+        if (!r)
+            return false;
+        if (entry.data.add_card.had_card0) {
+            Cardinality *c = malloc(sizeof(Cardinality));
+            if (c) {
+                strncpy(c->value, entry.data.add_card.card0, CARDINALITY_LEN - 1);
+                c->value[CARDINALITY_LEN - 1] = '\0';
+                if (r->cards[0])
+                    free(r->cards[0]);
+                r->cards[0] = c;
+            }
+        } else {
+            if (r->cards[0]) {
+                free(r->cards[0]);
+                r->cards[0] = NULL;
+            }
+        }
+        if (entry.data.add_card.had_card1) {
+            Cardinality *c = malloc(sizeof(Cardinality));
+            if (c) {
+                strncpy(c->value, entry.data.add_card.card1, CARDINALITY_LEN - 1);
+                c->value[CARDINALITY_LEN - 1] = '\0';
+                if (r->cards[1])
+                    free(r->cards[1]);
+                r->cards[1] = c;
+            }
+        } else {
+            if (r->cards[1]) {
+                free(r->cards[1]);
+                r->cards[1] = NULL;
+            }
+        }
+        show_msg(console_win, "Undid: add card", "UPDATE");
+        return true;
+    }
+
+    case UNDO_CHANGE_NAME: {
+        // The inverse of "change name A -> B" is "change name B -> A"
+        Entity *e = search_entity(entry.data.change_name.new_name);
+        if (e) {
+            strncpy(e->name, entry.data.change_name.old_name, MAX_NAME_LEN);
+            e->name[MAX_NAME_LEN - 1] = '\0';
+            show_msg(console_win, "Undid: change name", "UPDATE");
+            return true;
+        }
+        Relationship *r = search_relationship(entry.data.change_name.new_name);
+        if (r) {
+            strncpy(r->name, entry.data.change_name.old_name, MAX_NAME_LEN);
+            r->name[MAX_NAME_LEN - 1] = '\0';
+            show_msg(console_win, "Undid: change name", "UPDATE");
+            return true;
+        }
+        return false;
+    }
+
+    case UNDO_CONVERT_MLD: {
+        // Replay the pre-conversion snapshot to restore the MCD state
+        restore_from_snapshot(entry.data.convert_mld.snapshot, entry.data.convert_mld.snapshot_len, tree, a, console_win);
+        show_msg(console_win, "Undid: convert MLD", "UPDATE");
+        return true;
+    }
+
+    case UNDO_DELETE: {
+        if (entry.data.delete.delete_type == 1) {
+            // Restore an entire deleted element (entity or relationship)
+            if (!entry.data.delete.is_relationship) {
+                // --- Re-create the entity ---
+                Entity *e = createEntity(entry.data.delete.name, entry.data.delete.x, entry.data.delete.y);
+                if (!e)
+                    return false;
+
+                // Replay all stored properties
+                for (int i = 0; i < entry.data.delete.num_properties; i++) {
+                    addProperty(e, entry.data.delete.props[i].name, entry.data.delete.props[i].type,
+                                (KeyType)entry.data.delete.props[i].keytype);
+                }
+                show_msg(console_win, "Undid: delete entity", "UPDATE");
+                return true;
+            } else {
+                // --- Re-create the relationship ---
+                Entity *e1 = search_entity(entry.data.delete.e1_name);
+                Entity *e2 = search_entity(entry.data.delete.e2_name);
+                if (!e1 || !e2) {
+                    show_msg(console_win, "Undo delete failed: attached entities no longer exist", "WARNING");
+                    return false;
+                }
+
+                Relationship *r =
+                    addRelationship(entry.data.delete.x, entry.data.delete.y, e1, e2, entry.data.delete.name);
+                if (!r)
+                    return false;
+
+                // Replay properties
+                for (int i = 0; i < entry.data.delete.num_properties; i++) {
+                    addPropertyRelationship(r, entry.data.delete.props[i].name, entry.data.delete.props[i].type,
+                                            (KeyType)entry.data.delete.props[i].keytype);
+                }
+
+                // Replay cardinalities if they existed
+                if (entry.data.delete.had_card0) {
+                    Cardinality *c = malloc(sizeof(Cardinality));
+                    if (c) {
+                        strncpy(c->value, entry.data.delete.card0, CARDINALITY_LEN - 1);
+                        c->value[CARDINALITY_LEN - 1] = '\0';
+                        r->cards[0] = c;
+                    }
+                }
+                if (entry.data.delete.had_card1) {
+                    Cardinality *c = malloc(sizeof(Cardinality));
+                    if (c) {
+                        strncpy(c->value, entry.data.delete.card1, CARDINALITY_LEN - 1);
+                        c->value[CARDINALITY_LEN - 1] = '\0';
+                        r->cards[1] = c;
+                    }
+                }
+                show_msg(console_win, "Undid: delete relationship", "UPDATE");
+                return true;
+            }
+        } else {
+            // --- Restore a deleted property ---
+            if (!entry.data.delete.is_relationship) {
+                Entity *e = search_entity(entry.data.delete.name);
+                if (!e)
+                    return false;
+                addProperty(e, entry.data.delete.prop_name, entry.data.delete.prop_type,
+                            (KeyType)entry.data.delete.keytype);
+                show_msg(console_win, "Undid: delete property", "UPDATE");
+                return true;
+            } else {
+                Relationship *r = search_relationship(entry.data.delete.name);
+                if (!r)
+                    return false;
+                addPropertyRelationship(r, entry.data.delete.prop_name, entry.data.delete.prop_type,
+                                        (KeyType)entry.data.delete.keytype);
+                show_msg(console_win, "Undid: delete property", "UPDATE");
+                return true;
+            }
+        }
+    }
+    case UNDO_CLEAR: {
+        restore_from_snapshot(entry.data.clear.snapshot, entry.data.clear.snapshot_len, tree, a, console_win);
+        show_msg(console_win, "Undid: clear diagram", "UPDATE");
+        return true;
+    }
+
+    default:
+        return false;
+    }
+
+    return false;
 }

@@ -11,7 +11,7 @@ void show_message(WINDOW *console_win, const char *msg) {
     wrefresh(console_win);
 }
 
-bool da_execute(AST *t, Arena *a, WINDOW *console_win, const char *input, bool *needs_redraw) {
+bool execute_command(AST *t, Arena *a, WINDOW *console_win, const char *input, bool *needs_redraw) {
     if (!t) {
         // LOG: failed to build AST (Dosn't  exist)
         return false;

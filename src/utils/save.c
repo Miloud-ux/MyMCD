@@ -1,4 +1,3 @@
-
 #include "save.h"
 #include "../command_processor.h"
 #include "../global_objects.h"
@@ -134,7 +133,7 @@ bool load_diagram(const char *filename, Arena *a, AST *tree, WINDOW *console_win
         return false;
     }
 
-    // Determine file size
+    //  file size
     fseek(f, 0, SEEK_END);
     long file_size = ftell(f);
     fseek(f, 0, SEEK_SET);
@@ -189,13 +188,13 @@ bool load_diagram(const char *filename, Arena *a, AST *tree, WINDOW *console_win
             // attempt to execute whatever is left if non-empty.
             if (semicolon > cmd_start) {
                 *semicolon = '\0';
-                // Trim trailing whitespace
+                // trim trailing whitespace
                 char *end = semicolon - 1;
                 while (end > cmd_start && (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r')) {
                     *end-- = '\0';
                 }
                 if (*cmd_start != '\0') {
-                    if (da_execute(tree, a, console_win, cmd_start, needs_redraw)) {
+                    if (execute_command(tree, a, console_win, cmd_start, needs_redraw)) {
                         any_ok = true;
                     }
                 }
@@ -211,7 +210,7 @@ bool load_diagram(const char *filename, Arena *a, AST *tree, WINDOW *console_win
 
         // execute command if non-empty
         if (*cmd_start != '\0') {
-            if (da_execute(tree, a, console_win, cmd_start, needs_redraw)) {
+            if (execute_command(tree, a, console_win, cmd_start, needs_redraw)) {
                 any_ok = true;
             }
         }
@@ -228,4 +227,84 @@ bool load_diagram(const char *filename, Arena *a, AST *tree, WINDOW *console_win
     }
 
     return any_ok;
+}
+
+size_t snapshot_diagram_to_buf(char *buf, size_t buf_size) {
+    if (!buf || buf_size == 0) {
+        return 0;
+    }
+
+    size_t pos = 0;
+
+// helper macro: appends a formatted string to buf, advancing pos.
+// stops writing if the buffer is full but keeps counting so the caller
+// can detect truncation (pos >= buf_size).
+#define SNAP_WRITE(...)                                                                                                  \
+    do {                                                                                                                 \
+        if (pos < buf_size) {                                                                                            \
+            int _n = snprintf(buf + pos, buf_size - pos, __VA_ARGS__);                                                   \
+            if (_n > 0)                                                                                                  \
+                pos += (size_t)_n;                                                                                       \
+        }                                                                                                                \
+    } while (0)
+
+    DiagramType dtype = global_objects.current_dtype;
+    SNAP_WRITE("# %s\n", (dtype == MLD) ? "MLD" : "MCD");
+
+    if (dtype == MLD) {
+        SNAP_WRITE("convert MLD;\n");
+    }
+
+    for (int i = 0; i < global_objects.entity_count; i++) {
+        Entity *e = global_objects.entities[i];
+        if (!e)
+            continue;
+
+        SNAP_WRITE("create entity \"%s\";\n", e->name);
+
+        for (int j = 0; j < e->num_properties; j++) {
+            Property *p = e->properties[j];
+            if (!p)
+                continue;
+            SNAP_WRITE("add property \"%s\" \"%s\" %s%s;\n", e->name, p->name, p->type, key_type_str(p->keytype));
+        }
+    }
+
+    for (int i = 0; i < global_objects.relationship_count; i++) {
+        Relationship *r = global_objects.relationships[i];
+        if (!r)
+            continue;
+        if (!r->e1 || !r->e2)
+            continue;
+
+        SNAP_WRITE("create relationship \"%s\" \"%s\" \"%s\";\n", r->name, r->e1->name, r->e2->name);
+
+        // Properties on the relationship
+        for (int j = 0; j < r->num_properties; j++) {
+            Property *p = r->properties[j];
+            if (!p)
+                continue;
+            SNAP_WRITE("add property \"%s\" \"%s\" %s%s;\n", r->name, p->name, p->type, key_type_str(p->keytype));
+        }
+
+        // Cardinality: reconstruct the "min1,max1,min2,max2" raw string
+        if (r->cards[0] && r->cards[1]) {
+            // cards[n]->value is stored as "x,y\0" (CARDINALITY_LEN = 4)
+            // We need to combine them into one "x,y,x,y" raw string
+            char raw[RAW_CARDINALITY_LEN]; // 9 bytes: "x,y,x,y\0"
+            snprintf(raw, RAW_CARDINALITY_LEN, "%c,%c,%c,%c", r->cards[0]->value[0], r->cards[0]->value[2],
+                     r->cards[1]->value[0], r->cards[1]->value[2]);
+            SNAP_WRITE("add card \"%s\" \"%s\";\n", r->name, raw);
+        }
+    }
+
+#undef SNAP_WRITE
+
+    if (pos < buf_size) {
+        buf[pos] = '\0';
+    } else {
+        buf[buf_size - 1] = '\0';
+    }
+
+    return pos;
 }

@@ -34,6 +34,7 @@ CORE_SRC = \
 	src/DSA/vec.c \
 	src/DSA/pqueue.c \
 	src/DSA/AST.c \
+	src/DSA/undo_stack.c \
 	src/Lexer/parse.c \
 	src/Lexer/tokenize.c \
 	src/utils/arena_allocator.c \
@@ -61,6 +62,7 @@ TEST_MCD_SRC         = src/testing/tests.c $(CORE_SRC)
 TEST_HELP_SRC        = src/testing/tests.c $(CORE_SRC)
 TEST_INTEGRATION_SRC = src/testing/tests.c $(CORE_SRC)
 TEST_GRAPHICS_SRC    = src/testing/tests.c $(CORE_SRC)
+TEST_UNDO_DELETE_SRC = src/testing/tests.c $(CORE_SRC)
 
 # -------------------------------------------------------------------------
 # Targets
@@ -72,7 +74,7 @@ TARGET = MyMCD
 # -------------------------------------------------------------------------
 .PHONY: all clean run install uninstall \
         test_all test_arena test_lexer test_parser test_mcd test_help \
-        test_integration test_graphics
+        test_integration test_graphics test_undo_delete
 
 # =========================================================================
 # BUILD RULES
@@ -165,7 +167,12 @@ test_graphics:
 	$(CC) $(CFLAGS) -DGRAPHICS_TEST -o test_graphics $(TEST_GRAPHICS_SRC) $(LIBS)
 	@echo "--- Built Graphics Tests (interactive) ---"
 
-test_all: test_arena test_lexer test_parser test_mcd test_help test_integration
+test_undo_delete:
+	$(CC) $(CFLAGS) -DUNDO_DELETE_TESTS -o test_undo_delete $(TEST_UNDO_DELETE_SRC) $(LIBS)
+	@echo "--- Built Undo & Delete Tests ---"
+	./test_undo_delete
+
+test_all: test_arena test_lexer test_parser test_mcd test_help test_integration test_undo_delete
 	@echo ""
 	@echo "=== All headless test suites complete ==="
 	@echo "Log files:"
@@ -175,6 +182,7 @@ test_all: test_arena test_lexer test_parser test_mcd test_help test_integration
 	@echo "  mcd_test_results.log"
 	@echo "  help_test_results.log"
 	@echo "  integration_test_results.log"
+	@echo "  undo_delete_test_results.log"
 
 # =========================================================================
 # CLEAN
@@ -184,6 +192,6 @@ clean:
 	rm -rf $(OBJ_DIR)
 	rm -f $(TARGET) \
 	      test_arena test_lexer test_parser test_mcd test_help \
-	      test_integration test_graphics \
+	      test_integration test_graphics test_undo_delete \
 	      *.log gmon.out
 	@echo "Cleaned all build artifacts."
