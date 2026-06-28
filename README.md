@@ -253,7 +253,6 @@ Test results are written to `*_test_results.log` files.
 │   ├── global_objects.c/h      # Global entity/relationship registry
 │   ├── command_processor.c/h   # Command execution dispatcher
 │   ├── help_window.c/h         # Built-in help pages and scrolling
-│   ├── undo_stack.c/h          # Undo stack with operation history and snapshots
 │   ├── Lexer/
 │   │   ├── tokenize.c/h        # Lexer (keywords, strings, identifiers)
 │   │   └── parse.c/h           # Parser + command executors
@@ -261,6 +260,7 @@ Test results are written to `*_test_results.log` files.
 │   │   ├── AST.c/h             # Abstract Syntax Tree for command history
 │   │   ├── astar.c/h           # A* pathfinding grid
 │   │   ├── pqueue.c/h          # Binary heap priority queue
+│   │   ├── undo_stack.c/h          # Undo stack with operation history and snapshots
 │   │   ├── kmp.c/h             # KMP string search
 │   │   └── vec.c/h             # Generic dynamic array (stretchy buffer)
 │   └── utils/
