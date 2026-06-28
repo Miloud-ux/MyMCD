@@ -280,13 +280,11 @@ Test results are written to `*_test_results.log` files.
 
 This is beta software. Here is what you should know:
 
-- **MCD to MLD conversion** is a major operation; while `undo` is supported, we recommend saving your MCD before converting.
+- **MCD to MLD conversion** is a major operation; while `undo` is supported, i recommend saving your MCD before converting.
 - **Terminal only**: No GUI version. Requires a terminal with ncurses and color support.
 - **Resize handling**: Terminal resizing is basic. If the layout breaks, restart the application.
-- **Wayland flicker**: Some rendering optimizations are Wayland-specific; X11 and Windows terminals may have minor flicker during rapid redraws.
 - **Windows install**: `make install` is disabled on Windows. Use `make run` instead.
-- **Save format**: Diagrams are saved as plain text command scripts, not binary files. This is intentional for version control, but there is no schema validation on load.
-- **`clear` does not ask for confirmation** before wiping the diagram.
+- **Save format**: Diagrams are saved as plain text command scripts, not binary files.
 
 ---
 
