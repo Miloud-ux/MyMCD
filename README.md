@@ -299,8 +299,6 @@ A friend of mine [Iskander](https://github.com/iskanderMQ) had this idea and I l
 ## Credits
 
 - [Iskander](https://github.com/iskanderMQ) — for the original idea and inspiration behind MyMCD.
-- [Sean Barrett](https://github.com/nothings/stb) — for the `stb` stretchy buffer pattern that inspired the fast generic vector implementation (`vec.c/h`).
-
 ---
 
 ## License
