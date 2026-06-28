@@ -94,8 +94,8 @@ int main() {
     init_AST(&tree);
 
     if (startup_choice == MENU_NEW) {
-        // Load the built-in test diagram (original behaviour)
-        setup_large_e_commerce_delivery_mcd();
+        // test diagram for debugging
+        // setup_large_e_commerce_delivery_mcd();
     } else {
         // MENU_LOAD: prompt for filename, then replay commands from the file.
         // Draw a simple centred prompt directly on stdscr.
