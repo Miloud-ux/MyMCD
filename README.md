@@ -117,11 +117,6 @@ sudo apt-get install build-essential libncurses5-dev
 brew install ncurses
 ```
 
-**Windows (MSYS2/MinGW-w64):**
-```bash
-pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-ncurses make
-```
-
 ### Compile
 ```bash
 make
