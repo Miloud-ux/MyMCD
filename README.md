@@ -1,6 +1,6 @@
 # MyMCD
 
-&gt; A terminal-based database schema designer for the Merise methodology. Draw MCD (Conceptual Data Model) diagrams with entities and relationships, convert them to MLD (Logical Data Model), and export production-ready SQL — all from the keyboard.
+&gt; A terminal-based database schema designer for the Merise methodology. Draw MCD (Conceptual Data Model) diagrams with entities and relationships, convert them to MLD (Logical Data Model), and export production-ready SQL, all from the keyboard.
 
 [![C](https://img.shields.io/badge/C-99-blue.svg)](https://en.wikipedia.org/wiki/C99)
 [![Linux](https://img.shields.io/badge/Linux-x86__64-green.svg)]()
