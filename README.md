@@ -190,7 +190,7 @@ Type `help` anytime for the full command reference.
 
 Property types: `int`, `str`, `double`, `date`, `money`
 
-Key markers: `pk` (primary key), `fk` (foreign key – only allowed in MLD mode)
+Key markers: `pk` (primary key), `fk` (foreign key are only allowed in MLD mode)
 
 ---
 
@@ -276,7 +276,6 @@ Test results are written to `*_test_results.log` files.
 This is beta software. Here is what you should know:
 
 - **MCD to MLD conversion** is a major operation; while `undo` is supported, i recommend saving your MCD before converting.
-- **Terminal only**: No GUI version. Requires a terminal with ncurses and color support.
 - **Resize handling**: Terminal resizing is basic. If the layout breaks, restart the application.
 - **Windows install**: `make install` is disabled on Windows. Use `make run` instead.
 - **Save format**: Diagrams are saved as plain text command scripts, not binary files.
@@ -305,8 +304,7 @@ MIT License
 This is a personal hobby project, but I am happy to review pull requests. Areas that could use help:
 - Better terminal resize handling
 - Redo support (currently only undo is implemented)
-- GUI version (GTK/Qt) or web export
 - More comprehensive error messages for parser failures
-- Windows native build without MSYS2
+- Installation process for windows
 
 If you find a bug, please open an issue with the command that triggered it and your terminal environment (OS, terminal emulator, TERM value).
