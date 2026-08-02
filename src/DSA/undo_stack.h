@@ -41,15 +41,16 @@ typedef struct {
 } UndoChangeName;
 
 // full diagram snapshot stored as plain text commands (same format as
-// save_diagram). fixed-size buffer so no heap alloc is
-// needed and the entry stays self-contained.
+// save_diagram).  The snapshot is heap-allocated so the entry stays small;
+// the caller that pushes it transfers ownership, and undo_stack frees it on
+// drop/evict/init.
 typedef struct {
-        char snapshot[UNDO_SNAPSHOT_SIZE];
+        char *snapshot;
         size_t snapshot_len;
 } UndoConvertMld;
 
 typedef struct {
-        char snapshot[UNDO_SNAPSHOT_SIZE];
+        char *snapshot;
         size_t snapshot_len;
 } UndoClear;
 
@@ -94,6 +95,8 @@ typedef struct {
 } UndoStack;
 
 void undo_stack_init(UndoStack *s);
+void undo_stack_clear(UndoStack *s);
 bool undo_stack_push(UndoStack *s, UndoEntry entry);
 bool undo_stack_pop(UndoStack *s, UndoEntry *out);
 bool undo_stack_is_empty(const UndoStack *s);
+void undo_entry_free(UndoEntry *e);

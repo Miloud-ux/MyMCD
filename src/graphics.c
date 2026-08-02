@@ -6,7 +6,9 @@
 #include "help_window.h"
 #include <ncurses.h>
 #include <string.h>
+#include <stdlib.h>
 #include <time.h>
+#include <limits.h>
 
 enum status last_status = Typing;
 
@@ -457,6 +459,351 @@ static AttachPoint slotted_attach_point(Entity *e, Side side, int slot_index, in
     return p;
 }
 
+// ---------------------------------------------------------------------------
+// Persisted A* grid cache.
+//
+// Each relationship draws two A* routes (entity1 -> relationship and
+// relationship -> entity2).  Creating + freeing both grids on every frame is
+// pure waste: the grid geometry only changes when the attach points move, and
+// the obstacle layout only changes when an entity/relationship is added,
+// removed or moved.  We therefore keep the grids alive across frames and only
+// (re)build them when something actually changed.
+// ---------------------------------------------------------------------------
+#define REL_GRID_CACHE_SIZE 64
+
+typedef struct {
+    Relationship *rel;        // which relationship these grids belong to
+    AStarGrid *grid1;
+    AStarGrid *grid2;
+    AStarPath *path1;         // final path (endpoints injected) for route 1
+    AStarPath *path2;         // final path (endpoints injected) for route 2
+    int s1x, s1y, e1x, e1y;   // geometry the grids were built for (grid1)
+    int s2x, s2y, e2x, e2y;   // geometry the grids were built for (grid2)
+    bool in_use;
+    int age;                  // LRU counter
+} RelGridCacheEntry;
+
+static RelGridCacheEntry rel_grid_cache[REL_GRID_CACHE_SIZE];
+static int rel_grid_cache_age = 0;
+static unsigned long grid_rebuilds = 0;
+static unsigned long grid_reuses = 0;
+static long last_frame_us = 0;
+static long frame_erase_us = 0;
+static long frame_entities_us = 0;
+static long frame_relationships_us = 0;
+static long frame_asts_calls = 0;
+
+// ---------------------------------------------------------------------------
+// Per-frame change detection for the route grid cache.
+//
+// Instead of a global "world signature" that invalidates every relationship's
+// grids whenever anything moves, we track which boxes actually changed since
+// the last drawn frame (position diffs + register/unregister generation).
+// A route only rebuilds when its own grid bounding box intersects a changed
+// box, so moving one element only rebuilds the routes that are actually near
+// it.
+// ---------------------------------------------------------------------------
+typedef struct {
+    int x, y, w, h;
+} DirtyBox;
+
+#define MAX_DIRTY_BOXES (MAX_OBJECTS * 4)
+
+static DirtyBox frame_dirty[MAX_DIRTY_BOXES];
+static int frame_dirty_count = 0;
+static bool frame_force_rebuild = false; // structural change this frame
+
+// Last-frame position snapshot so moves can be detected by diffing.
+static Entity *last_entities[MAX_OBJECTS];
+static int last_ew[MAX_OBJECTS];
+static int last_eh[MAX_OBJECTS];
+static int last_ex[MAX_OBJECTS];
+static int last_ey[MAX_OBJECTS];
+static int last_ec = -1;
+static Relationship *last_rels[MAX_OBJECTS];
+static int last_rw[MAX_OBJECTS];
+static int last_rh[MAX_OBJECTS];
+static int last_rx[MAX_OBJECTS];
+static int last_ry[MAX_OBJECTS];
+static int last_rc = -1;
+static int last_gen = -1;
+
+static void add_dirty_box(int x, int y, int w, int h) {
+    if (frame_dirty_count < MAX_DIRTY_BOXES) {
+        frame_dirty[frame_dirty_count].x = x;
+        frame_dirty[frame_dirty_count].y = y;
+        frame_dirty[frame_dirty_count].w = w;
+        frame_dirty[frame_dirty_count].h = h;
+        frame_dirty_count++;
+    }
+}
+
+static void detect_changes(void) {
+    frame_dirty_count = 0;
+
+    bool structural = (world_generation != last_gen) ||
+                      (global_objects.entity_count != last_ec) ||
+                      (global_objects.relationship_count != last_rc);
+    last_gen = world_generation;
+    frame_force_rebuild = structural;
+
+    if (!structural) {
+        // Entities: current box (or both old+new box on move) into the dirty set.
+        for (int i = 0; i < global_objects.entity_count; i++) {
+            Entity *e = global_objects.entities[i];
+            if (!e)
+                continue;
+            int j;
+            for (j = 0; j < last_ec; j++) {
+                if (last_entities[j] == e)
+                    break;
+            }
+            if (j < last_ec) {
+                if (last_ex[j] != e->x || last_ey[j] != e->y) {
+                    add_dirty_box(last_ex[j], last_ey[j], last_ew[j], last_eh[j]);
+                    add_dirty_box(e->x, e->y, e->width, e->height);
+                }
+            } else {
+                add_dirty_box(e->x, e->y, e->width, e->height); // newly added
+            }
+        }
+        // Entities removed since last frame: mark their old box.
+        for (int j = 0; j < last_ec; j++) {
+            if (!last_entities[j])
+                continue;
+            bool present = false;
+            for (int i = 0; i < global_objects.entity_count; i++) {
+                if (global_objects.entities[i] == last_entities[j]) {
+                    present = true;
+                    break;
+                }
+            }
+            if (!present)
+                add_dirty_box(last_ex[j], last_ey[j], last_ew[j], last_eh[j]);
+        }
+
+        // Relationships: same diff.
+        for (int i = 0; i < global_objects.relationship_count; i++) {
+            Relationship *r = global_objects.relationships[i];
+            if (!r)
+                continue;
+            int j;
+            for (j = 0; j < last_rc; j++) {
+                if (last_rels[j] == r)
+                    break;
+            }
+            if (j < last_rc) {
+                if (last_rx[j] != r->x || last_ry[j] != r->y) {
+                    add_dirty_box(last_rx[j], last_ry[j], last_rw[j], last_rh[j]);
+                    add_dirty_box(r->x, r->y, r->width, r->height);
+                }
+            } else {
+                add_dirty_box(r->x, r->y, r->width, r->height); // newly added
+            }
+        }
+        for (int j = 0; j < last_rc; j++) {
+            if (!last_rels[j])
+                continue;
+            bool present = false;
+            for (int i = 0; i < global_objects.relationship_count; i++) {
+                if (global_objects.relationships[i] == last_rels[j]) {
+                    present = true;
+                    break;
+                }
+            }
+            if (!present)
+                add_dirty_box(last_rx[j], last_ry[j], last_rw[j], last_rh[j]);
+        }
+    }
+
+    // Refresh the position snapshot for the next frame.
+    last_ec = global_objects.entity_count;
+    for (int i = 0; i < global_objects.entity_count; i++) {
+        Entity *e = global_objects.entities[i];
+        last_entities[i] = e;
+        if (e) {
+            last_ex[i] = e->x;
+            last_ey[i] = e->y;
+            last_ew[i] = e->width;
+            last_eh[i] = e->height;
+        }
+    }
+    last_rc = global_objects.relationship_count;
+    for (int i = 0; i < global_objects.relationship_count; i++) {
+        Relationship *r = global_objects.relationships[i];
+        last_rels[i] = r;
+        if (r) {
+            last_rx[i] = r->x;
+            last_ry[i] = r->y;
+            last_rw[i] = r->width;
+            last_rh[i] = r->height;
+        }
+    }
+}
+
+// True when the route between (sx,sy) and (ex,ey) may be affected by this
+// frame's changes: its A* grid bounding box intersects a changed box.
+static bool route_affected(int sx, int sy, int ex, int ey) {
+    if (frame_force_rebuild)
+        return true;
+    if (frame_dirty_count == 0)
+        return false;
+
+    int margin = 10;
+    int x0 = (sx < ex ? sx : ex) - margin;
+    int x1 = (sx > ex ? sx : ex) + margin;
+    int y0 = (sy < ey ? sy : ey) - margin;
+    int y1 = (sy > ey ? sy : ey) + margin;
+
+    for (int i = 0; i < frame_dirty_count; i++) {
+        const DirtyBox *b = &frame_dirty[i];
+        if (b->x <= x1 && b->x + b->w >= x0 && b->y <= y1 && b->y + b->h >= y0)
+            return true;
+    }
+    return false;
+}
+
+// Find the cache slot for a relationship, or an empty slot to fill.
+static RelGridCacheEntry *rel_grid_cache_find(Relationship *rel) {
+    for (int i = 0; i < REL_GRID_CACHE_SIZE; i++) {
+        if (rel_grid_cache[i].in_use && rel_grid_cache[i].rel == rel)
+            return &rel_grid_cache[i];
+    }
+
+    // Not cached: pick an empty slot, else evict the LRU one.
+    RelGridCacheEntry *empty = NULL;
+    for (int i = 0; i < REL_GRID_CACHE_SIZE; i++) {
+        if (!rel_grid_cache[i].in_use) {
+            empty = &rel_grid_cache[i];
+            break;
+        }
+    }
+    if (empty) {
+        empty->rel = rel;
+        empty->in_use = true;
+        return empty;
+    }
+
+    int oldest = INT_MAX;
+    RelGridCacheEntry *victim = NULL;
+    for (int i = 0; i < REL_GRID_CACHE_SIZE; i++) {
+        if (rel_grid_cache[i].age < oldest) {
+            oldest = rel_grid_cache[i].age;
+            victim = &rel_grid_cache[i];
+        }
+    }
+    if (victim) {
+        astar_free_grid(victim->grid1);
+        astar_free_grid(victim->grid2);
+        astar_free_path(victim->path1);
+        astar_free_path(victim->path2);
+        victim->grid1 = NULL;
+        victim->grid2 = NULL;
+        victim->path1 = NULL;
+        victim->path2 = NULL;
+        victim->rel = rel;
+        return victim;
+    }
+    return NULL;
+}
+
+static void rel_grid_cache_touch(RelGridCacheEntry *e) {
+    e->age = rel_grid_cache_age++;
+}
+
+// Mark every entity/relationship box as an obstacle in the given grid.
+static void mark_all_obstacles(AStarGrid *g) {
+    for (int i = 0; i < global_objects.entity_count; i++) {
+        if (global_objects.entities[i])
+            astar_mark_obstacle(g, global_objects.entities[i]->x,
+                                global_objects.entities[i]->y,
+                                global_objects.entities[i]->width,
+                                global_objects.entities[i]->height);
+    }
+    for (int i = 0; i < global_objects.relationship_count; i++) {
+        if (global_objects.relationships[i])
+            astar_mark_obstacle(g, global_objects.relationships[i]->x,
+                                global_objects.relationships[i]->y,
+                                global_objects.relationships[i]->width,
+                                global_objects.relationships[i]->height);
+    }
+}
+
+// Build a grid for the given route and mark all obstacles into it.
+static AStarGrid *build_route_grid(int sx, int sy, int ex, int ey) {
+    int margin = 10;
+    AStarGrid *g = astar_create_grid(sx, sy, ex, ey, margin);
+    mark_all_obstacles(g);
+    return g;
+}
+
+// Build/refresh the cached grids for a relationship.  Returns a fully-built
+// grid1 and grid2 via out-params, ready for astar_find_path().  Returns true
+// when both grids (and therefore the cached paths) were reused unchanged.
+//
+// A grid is reused when its geometry is unchanged AND the route was not
+// affected by this frame's changes.  If geometry is unchanged but the route
+// is affected, the grid allocation is kept and only its obstacles are
+// refreshed (avoids the per-grid malloc churn).  A geometry change rebuilds
+// the grid from scratch.
+static bool ensure_route_grids(RelGridCacheEntry *e, int s1x, int s1y, int e1x,
+                               int e1y, int s2x, int s2y, int e2x, int e2y,
+                               AStarGrid **grid1, AStarGrid **grid2) {
+    bool geom1 = e->grid1 && e->s1x == s1x && e->s1y == s1y &&
+                 e->e1x == e1x && e->e1y == e1y;
+    bool geom2 = e->grid2 && e->s2x == s2x && e->s2y == s2y &&
+                 e->e2x == e2x && e->e2y == e2y;
+    bool affected1 = route_affected(s1x, s1y, e1x, e1y);
+    bool affected2 = route_affected(s2x, s2y, e2x, e2y);
+
+    bool reused1 = geom1 && !affected1;
+    if (reused1) {
+        grid_reuses++;
+    } else if (geom1) {
+        // Route is near a change: keep the grid, refresh its obstacles.
+        astar_clear_obstacles(e->grid1);
+        mark_all_obstacles(e->grid1);
+        astar_free_path(e->path1);
+        e->path1 = NULL;
+        grid_rebuilds++;
+    } else {
+        astar_free_grid(e->grid1);
+        astar_free_path(e->path1);
+        e->grid1 = build_route_grid(s1x, s1y, e1x, e1y);
+        e->path1 = NULL;
+        e->s1x = s1x;
+        e->s1y = s1y;
+        e->e1x = e1x;
+        e->e1y = e1y;
+        grid_rebuilds++;
+    }
+
+    bool reused2 = geom2 && !affected2;
+    if (reused2) {
+        grid_reuses++;
+    } else if (geom2) {
+        astar_clear_obstacles(e->grid2);
+        mark_all_obstacles(e->grid2);
+        astar_free_path(e->path2);
+        e->path2 = NULL;
+        grid_rebuilds++;
+    } else {
+        astar_free_grid(e->grid2);
+        astar_free_path(e->path2);
+        e->grid2 = build_route_grid(s2x, s2y, e2x, e2y);
+        e->path2 = NULL;
+        e->s2x = s2x;
+        e->s2y = s2y;
+        e->e2x = e2x;
+        e->e2y = e2y;
+        grid_rebuilds++;
+    }
+
+    *grid1 = e->grid1;
+    *grid2 = e->grid2;
+    return reused1 && reused2 && e->path1 && e->path2;
+}
+
 void drawConnectionAStar(Relationship *r) {
     if (!r || !r->e1 || !r->e2)
         return;
@@ -545,52 +892,36 @@ void drawConnectionAStar(Relationship *r) {
         break;
     }
 
-    int margin = 10; // margin for ?
+    RelGridCacheEntry *ce = rel_grid_cache_find(r);
+    rel_grid_cache_touch(ce);
+
+    AStarGrid *grid1 = NULL;
+    AStarGrid *grid2 = NULL;
+    bool paths_cached =
+        ensure_route_grids(ce, start1_x, start1_y, end1_x, end1_y, start2_x,
+                           start2_y, end2_x, end2_y, &grid1, &grid2);
 
     // path 1: entity1 --> relationship
-    AStarGrid *grid1 = astar_create_grid(start1_x, start1_y, end1_x, end1_y, margin);
-    // obstacle marking
-    for (int i = 0; i < global_objects.entity_count; i++) {
-        if (global_objects.entities[i])
-            astar_mark_obstacle(grid1, global_objects.entities[i]->x, global_objects.entities[i]->y,
-                                global_objects.entities[i]->width, global_objects.entities[i]->height);
+    if (!paths_cached) {
+        frame_asts_calls++;
+        astar_free_path(ce->path1);
+        ce->path1 = astar_find_path(grid1, start1_x, start1_y, end1_x, end1_y);
+        if (ce->path1)
+            add_endpoints_to_path(ce->path1, ap1.x, ap1.y, ap_rel_e1.x, ap_rel_e1.y);
     }
-    for (int i = 0; i < global_objects.relationship_count; i++) {
-        if (global_objects.relationships[i])
-            astar_mark_obstacle(grid1, global_objects.relationships[i]->x, global_objects.relationships[i]->y,
-                                global_objects.relationships[i]->width, global_objects.relationships[i]->height);
-    }
+    if (ce->path1)
+        draw_path_with_corners(ce->path1);
 
-    AStarPath *path1 = astar_find_path(grid1, start1_x, start1_y, end1_x, end1_y);
-
-    if (path1) {
-        add_endpoints_to_path(path1, ap1.x, ap1.y, ap_rel_e1.x, ap_rel_e1.y);
-        draw_path_with_corners(path1);
-        astar_free_path(path1);
+    // path 2: relationship --> entity2
+    if (!paths_cached) {
+        frame_asts_calls++;
+        astar_free_path(ce->path2);
+        ce->path2 = astar_find_path(grid2, start2_x, start2_y, end2_x, end2_y);
+        if (ce->path2)
+            add_endpoints_to_path(ce->path2, ap_rel_e2.x, ap_rel_e2.y, ap2.x, ap2.y);
     }
-    astar_free_grid(grid1);
-
-    AStarGrid *grid2 = astar_create_grid(start2_x, start2_y, end2_x, end2_y, margin);
-    for (int i = 0; i < global_objects.entity_count; i++) {
-        if (global_objects.entities[i])
-            astar_mark_obstacle(grid2, global_objects.entities[i]->x, global_objects.entities[i]->y,
-                                global_objects.entities[i]->width, global_objects.entities[i]->height);
-    }
-    for (int i = 0; i < global_objects.relationship_count; i++) {
-        if (global_objects.relationships[i])
-            astar_mark_obstacle(grid2, global_objects.relationships[i]->x, global_objects.relationships[i]->y,
-                                global_objects.relationships[i]->width, global_objects.relationships[i]->height);
-    }
-
-    AStarPath *path2 = astar_find_path(grid2, start2_x, start2_y, end2_x, end2_y);
-
-    if (path2) {
-        // inject the actual border coordinates (ap_rel_e2 and ap2)
-        add_endpoints_to_path(path2, ap_rel_e2.x, ap_rel_e2.y, ap2.x, ap2.y);
-        draw_path_with_corners(path2);
-        astar_free_path(path2);
-    }
-    astar_free_grid(grid2);
+    if (ce->path2)
+        draw_path_with_corners(ce->path2);
 
     if (r->cards[0]) {
         switch (ap1.side) {
@@ -788,59 +1119,171 @@ void draw_help_window(WINDOW *win, HelpWindow *hwin, const char *search_buffer, 
     // wrefresh(win);
 }
 
-void draw_all_entities(GlobalObjects global_objects, int moving_index, bool is_moving) {
-    for (int i = 0; i < global_objects.entity_count; i++) {
-        if (global_objects.entities[i]) {
+void draw_all_entities(const GlobalObjects *global_objects, int moving_index, bool is_moving) {
+    for (int i = 0; i < global_objects->entity_count; i++) {
+        if (global_objects->entities[i]) {
             if (is_moving && i == moving_index) {
                 attron(COLOR_PAIR(3));
-                drawEntity(global_objects.entities[i]);
+                drawEntity(global_objects->entities[i]);
                 attroff(COLOR_PAIR(3));
             } else {
                 attron(COLOR_PAIR(7));
-                drawEntity(global_objects.entities[i]);
+                drawEntity(global_objects->entities[i]);
                 attroff(COLOR_PAIR(7));
             }
         }
     }
 }
 
-void draw_all_relationships(GlobalObjects global_objects, int moving_index, bool is_moving) {
-    for (int i = 0; i < global_objects.relationship_count; i++) {
-        if (global_objects.relationships[i]) {
+// Free cached grids for relationships that no longer exist.
+static void rel_grid_cache_prune(void) {
+    for (int i = 0; i < REL_GRID_CACHE_SIZE; i++) {
+        RelGridCacheEntry *e = &rel_grid_cache[i];
+        if (!e->in_use)
+            continue;
+
+        bool alive = false;
+        for (int j = 0; j < global_objects.relationship_count; j++) {
+            if (global_objects.relationships[j] == e->rel) {
+                alive = true;
+                break;
+            }
+        }
+        if (!alive) {
+            astar_free_grid(e->grid1);
+            astar_free_grid(e->grid2);
+            astar_free_path(e->path1);
+            astar_free_path(e->path2);
+            e->grid1 = NULL;
+            e->grid2 = NULL;
+            e->path1 = NULL;
+            e->path2 = NULL;
+            e->in_use = false;
+        }
+    }
+}
+
+void draw_all_relationships(const GlobalObjects *global_objects, int moving_index, bool is_moving) {
+    rel_grid_cache_prune();
+    detect_changes();
+    for (int i = 0; i < global_objects->relationship_count; i++) {
+        if (global_objects->relationships[i]) {
             if (is_moving && moving_index == i) {
                 attron(COLOR_PAIR(2));
-                drawRelationship(global_objects.relationships[i]);
-                drawConnection(global_objects.relationships[i]);
+                drawRelationship(global_objects->relationships[i]);
+                drawConnection(global_objects->relationships[i]);
                 attroff(COLOR_PAIR(2));
             } else {
                 attron(COLOR_PAIR(5));
-                drawRelationship(global_objects.relationships[i]);
-                drawConnection(global_objects.relationships[i]);
+                drawRelationship(global_objects->relationships[i]);
+                drawConnection(global_objects->relationships[i]);
                 attroff(COLOR_PAIR(5));
             }
         }
     }
 }
 
-void draw_all_and_refresh(int screen_width, bool *moving, bool *needs_redraw) {
+static bool frame_stats_overlay = false;
+static void draw_frame_stats_overlay(void);
+
+void draw_all_and_refresh(int screen_width, int moving_index, bool is_moving,
+                          bool *needs_redraw) {
     // Frame timing
-    struct timespec t0, t1;
+    struct timespec t0, t1, t2, t3;
     clock_gettime(CLOCK_MONOTONIC, &t0);
 
-    moving = false;
     erase();
-    draw_all_entities(global_objects, 0, moving);
-    draw_all_relationships(global_objects, 0, moving);
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    frame_asts_calls = 0;
+    draw_all_entities(&global_objects, moving_index, is_moving);
+    clock_gettime(CLOCK_MONOTONIC, &t2);
+    draw_all_relationships(&global_objects, moving_index, is_moving);
+    clock_gettime(CLOCK_MONOTONIC, &t3);
+
+    frame_erase_us = (t1.tv_sec - t0.tv_sec) * 1000000L + (t1.tv_nsec - t0.tv_nsec) / 1000L;
+    frame_entities_us = (t2.tv_sec - t1.tv_sec) * 1000000L + (t2.tv_nsec - t1.tv_nsec) / 1000L;
+    frame_relationships_us = (t3.tv_sec - t2.tv_sec) * 1000000L + (t3.tv_nsec - t2.tv_nsec) / 1000L;
+    last_frame_us = (t3.tv_sec - t0.tv_sec) * 1000000L + (t3.tv_nsec - t0.tv_nsec) / 1000L;
+
+    if (frame_stats_overlay)
+        draw_frame_stats_overlay();
+
     // queue stdscr and then console_win's doupdate inside draw_console_prompt
     // will flush both together when called right after this in the main loop
     wnoutrefresh(stdscr);
 
-    clock_gettime(CLOCK_MONOTONIC, &t1);
-    long us = (t1.tv_sec - t0.tv_sec) * 1000000L + (t1.tv_nsec - t0.tv_nsec) / 1000L;
-    // For debugging only
-    // mvprintw(0, 0, "frame: %4ldus", us);
+    // Testing hook: run with MCD_PERF=1 to log per-frame draw timing + cache
+    // hit/miss stats to perf.log.
+    static int perf_enabled = -1;
+    if (perf_enabled < 0)
+        perf_enabled = (getenv("MCD_PERF") != NULL);
+    if (perf_enabled)
+        print_frame_stats();
 
     *needs_redraw = false;
+}
+
+void toggle_frame_stats(void) {
+    frame_stats_overlay = !frame_stats_overlay;
+    if (frame_stats_overlay) {
+        astar_cache_reset_stats();
+        grid_rebuilds = 0;
+        grid_reuses = 0;
+    }
+}
+
+// On-screen overlay (top-left) showing frame time, FPS and A* cache hit/miss
+// counts.  Enabled via the "perf" command.
+static void draw_frame_stats_overlay(void) {
+    unsigned long hits = 0, misses = 0;
+    astar_cache_stats(&hits, &misses);
+
+    // Rolling FPS: count frames over a 1-second window.
+    static struct timespec fps_t0 = {0};
+    static long fps_frames = 0;
+    static double fps = 0.0;
+    if (fps_frames == 0) {
+        clock_gettime(CLOCK_MONOTONIC, &fps_t0);
+    }
+    fps_frames++;
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    double elapsed = (now.tv_sec - fps_t0.tv_sec) +
+                     (now.tv_nsec - fps_t0.tv_nsec) / 1e9;
+    if (elapsed >= 1.0) {
+        fps = fps_frames / elapsed;
+        fps_frames = 0;
+    }
+
+    double hit_pct = (hits + misses) ? 100.0 * hits / (hits + misses) : 0.0;
+    attron(COLOR_PAIR(3));
+    mvprintw(0, 0, "frame: %6ldus (erase %ld + ent %ld + rel %ld) | fps:%5.1f | astar:%ld hit:%lu miss:%lu (%.0f%%) | rebuild:%lu reuse:%lu",
+             last_frame_us, frame_erase_us, frame_entities_us, frame_relationships_us,
+             fps, frame_asts_calls, hits, misses, hit_pct, grid_rebuilds, grid_reuses);
+    attroff(COLOR_PAIR(3));
+}
+
+// Testing helper: appends one line per call with the time the last frame took
+// to draw, plus A* cache hit/miss counters and how many route grids were
+// rebuilt vs reused.  Written to perf.log so it can't corrupt the ncurses
+// screen; safe to call from the redraw loop.
+void print_frame_stats(void) {
+    unsigned long hits = 0, misses = 0;
+    astar_cache_stats(&hits, &misses);
+
+    static FILE *log = NULL;
+    if (!log) {
+        log = fopen("perf.log", "w");
+        if (log)
+            fprintf(log, "frame_us astar_hits astar_misses hit_pct grid_rebuilds grid_reuses\n");
+    }
+    if (!log)
+        return;
+
+    double hit_pct = (hits + misses) ? 100.0 * hits / (hits + misses) : 0.0;
+    fprintf(log, "%ld %lu %lu %.1f %lu %lu\n", last_frame_us, hits, misses,
+            hit_pct, grid_rebuilds, grid_reuses);
+    fflush(log);
 }
 
 WINDOW *init_pad(int num_lines, int num_col, HelpWindow hwin) {

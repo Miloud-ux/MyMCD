@@ -1415,8 +1415,8 @@ void run_graphics_tests(void) {
         init_global_objects();
         cases[i].setup();
         erase();
-        draw_all_relationships(global_objects, -1, false);
-        draw_all_entities(global_objects, -1, false);
+        draw_all_relationships(&global_objects, -1, false);
+        draw_all_entities(&global_objects, -1, false);
         mvprintw(0, 0, "%s  Press any key to continue...", cases[i].label);
         refresh();
         getch();
@@ -1510,6 +1510,7 @@ void run_integration_tests(void) {
 // =========================================================================
 #ifdef UNDO_DELETE_TESTS
 
+#include <stdlib.h>
 #include "../DSA/undo_stack.h"
 #include "../Lexer/parse.h"
 #include "../MCD_elements.h"
@@ -2262,14 +2263,19 @@ static void test_clear_undo_snapshot_structure(void) {
 
     // Simulate what parse_clear would do: snapshot before clear
     UndoEntry ue = {0};
-    ue.type = UNDO_CLEAR;              // Requires UNDO_CLEAR to be added to enum
-    ue.data.convert_mld.snapshot_len = // Reusing UndoConvertMld structure
-        snapshot_diagram_to_buf(ue.data.convert_mld.snapshot, sizeof(ue.data.convert_mld.snapshot));
+    ue.type = UNDO_CLEAR; // Requires UNDO_CLEAR to be added to enum
+    ue.data.convert_mld.snapshot = malloc(UNDO_SNAPSHOT_SIZE);
+    TEST("Snapshot buffer allocated", ue.data.convert_mld.snapshot != NULL);
+    if (ue.data.convert_mld.snapshot) {
+        ue.data.convert_mld.snapshot_len =
+            snapshot_diagram_to_buf(ue.data.convert_mld.snapshot, UNDO_SNAPSHOT_SIZE);
 
-    TEST("Snapshot has content", ue.data.convert_mld.snapshot_len > 0);
-    TEST("Snapshot starts with # MCD", strncmp(ue.data.convert_mld.snapshot, "# MCD", 5) == 0);
-    TEST("Snapshot contains entity name", strstr(ue.data.convert_mld.snapshot, "SnapEnt") != NULL);
-    TEST("Snapshot contains property", strstr(ue.data.convert_mld.snapshot, "id") != NULL);
+        TEST("Snapshot has content", ue.data.convert_mld.snapshot_len > 0);
+        TEST("Snapshot starts with # MCD", strncmp(ue.data.convert_mld.snapshot, "# MCD", 5) == 0);
+        TEST("Snapshot contains entity name", strstr(ue.data.convert_mld.snapshot, "SnapEnt") != NULL);
+        TEST("Snapshot contains property", strstr(ue.data.convert_mld.snapshot, "id") != NULL);
+    }
+    undo_entry_free(&ue);
 }
 
 // -------------------------------------------------------------------------

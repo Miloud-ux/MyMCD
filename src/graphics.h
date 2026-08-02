@@ -45,9 +45,11 @@ AStarPath *smooth_path(AStarPath *path);
 void draw_path_with_corners(AStarPath *path);
 
 // DRAW ALL STDSCR
-void draw_all_entities(GlobalObjects global_objects, int moving_index, bool is_moving);
-void draw_all_relationships(GlobalObjects global_objects, int moving_index, bool is_moving);
-void draw_all_and_refresh(int screen_width, bool *moving, bool *needs_redraw);
+void draw_all_entities(const GlobalObjects *global_objects, int moving_index, bool is_moving);
+void draw_all_relationships(const GlobalObjects *global_objects, int moving_index, bool is_moving);
+void draw_all_and_refresh(int screen_width, int moving_index, bool is_moving, bool *needs_redraw);
+void print_frame_stats(void);
+void toggle_frame_stats(void);
 
 /* CONSOLE DRAWING FUNCTIONS
  * Console drawing functions call refresh internally

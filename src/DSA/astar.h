@@ -18,6 +18,7 @@ typedef struct {
         AStarNode **nodes;      //  nodes grid
         int width, height;      //  search area surface
         int offset_x, offset_y; //  grid pos
+        unsigned long signature; //  incremental hash of obstacles + geometry
 } AStarGrid;
 
 typedef struct {
@@ -28,9 +29,13 @@ typedef struct {
 
 AStarGrid *astar_create_grid(int start_x, int start_y, int end_x, int end_y, int margin);
 void astar_mark_obstacle(AStarGrid *grid, int x, int y, int width, int height);
+void astar_clear_obstacles(AStarGrid *grid);
 AStarPath *astar_find_path(AStarGrid *grid, int start_x, int start_y, int end_x, int end_y);
 void astar_free_grid(AStarGrid *grid);
 
 void astar_free_path(AStarPath *path);
+void astar_cache_clear(void);
+void astar_cache_stats(unsigned long *hits, unsigned long *misses);
+void astar_cache_reset_stats(void);
 
 #endif

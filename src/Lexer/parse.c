@@ -282,12 +282,14 @@ bool parse_command(AST *tree, Parser *p, const char *content, WINDOW *console_wi
                 if (c.type == MLD) {
                     // Take a full snapshot of the MCD state before converting
                     // so the user can restore it with undo.  snapshot_diagram_to_buf
-                    // writes directly into the UndoEntry's fixed buffer using
-                    // only snprintf — no heap alloc, works on Windows and Linux.
+                    // writes into a heap buffer so the UndoEntry stays small.
                     UndoEntry ue = {0};
                     ue.type = UNDO_CONVERT_MLD;
-                    ue.data.convert_mld.snapshot_len =
-                        snapshot_diagram_to_buf(ue.data.convert_mld.snapshot, sizeof(ue.data.convert_mld.snapshot));
+                    ue.data.convert_mld.snapshot = malloc(UNDO_SNAPSHOT_SIZE);
+                    if (ue.data.convert_mld.snapshot) {
+                        ue.data.convert_mld.snapshot_len =
+                            snapshot_diagram_to_buf(ue.data.convert_mld.snapshot, UNDO_SNAPSHOT_SIZE);
+                    }
                     undo_stack_push(&global_objects.undo_stack, ue);
 
                     if (convert_to_mld(console_win)) {
@@ -731,7 +733,10 @@ bool parse_clear(WINDOW *console_win, AST *tree, Arena *a) {
     // Snapshot the current state BEFORE clearing, so undo can restore it
     UndoEntry ue = {0};
     ue.type = UNDO_CLEAR;
-    ue.data.clear.snapshot_len = snapshot_diagram_to_buf(ue.data.clear.snapshot, sizeof(ue.data.clear.snapshot));
+    ue.data.clear.snapshot = malloc(UNDO_SNAPSHOT_SIZE);
+    if (ue.data.clear.snapshot) {
+        ue.data.clear.snapshot_len = snapshot_diagram_to_buf(ue.data.clear.snapshot, UNDO_SNAPSHOT_SIZE);
+    }
 
     // Now clear everything
     init_global_objects();
@@ -1448,7 +1453,7 @@ static void restore_from_snapshot(const char *buf, size_t len, AST *tree, Arena 
     remove(tmpname);
 
     // Prevent the restored commands from being individually undoable
-    undo_stack_init(&global_objects.undo_stack);
+    undo_stack_clear(&global_objects.undo_stack);
 }
 
 bool execute_undo(AST *tree, Arena *a, WINDOW *console_win) {
@@ -1582,6 +1587,7 @@ bool execute_undo(AST *tree, Arena *a, WINDOW *console_win) {
     case UNDO_CONVERT_MLD: {
         // Replay the pre-conversion snapshot to restore the MCD state
         restore_from_snapshot(entry.data.convert_mld.snapshot, entry.data.convert_mld.snapshot_len, tree, a, console_win);
+        undo_entry_free(&entry);
         show_msg(console_win, "Undid: convert MLD", "UPDATE");
         return true;
     }
@@ -1665,6 +1671,7 @@ bool execute_undo(AST *tree, Arena *a, WINDOW *console_win) {
     }
     case UNDO_CLEAR: {
         restore_from_snapshot(entry.data.clear.snapshot, entry.data.clear.snapshot_len, tree, a, console_win);
+        undo_entry_free(&entry);
         show_msg(console_win, "Undid: clear diagram", "UPDATE");
         return true;
     }

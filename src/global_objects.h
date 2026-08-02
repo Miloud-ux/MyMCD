@@ -16,6 +16,10 @@ typedef struct {
 
 extern GlobalObjects global_objects;
 
+// Bumped whenever an entity/relationship is registered or unregistered, so
+// frame-based caches (route grids/paths) can detect structural changes.
+extern int world_generation;
+
 void init_global_objects();
 void register_entity(Entity *e);
 void unregister_entity(Entity *e);

@@ -152,13 +152,13 @@ int main() {
     }
 
     // Drawing
-    draw_all_and_refresh(screen_width, &moving, &needs_redraw);
+    draw_all_and_refresh(screen_width, -1, false, &needs_redraw);
     draw_console_prompt(console_win, input_buffer, status);
 
     while (is_running) {
 
         if (needs_redraw) {
-            draw_all_and_refresh(screen_width, &moving, &needs_redraw);
+            draw_all_and_refresh(screen_width, -1, false, &needs_redraw);
         }
 
         switch (status) {
@@ -195,6 +195,9 @@ int main() {
                     // LOG Error :empty command
                 } else if (strcmp(input_buffer, "debug") == 0) {
                     draw_ast_debug_window(debug_window, &tree);
+                } else if (strcmp(input_buffer, "perf") == 0) {
+                    toggle_frame_stats();
+                    needs_redraw = true;
                 } else {
                     execute_command(&tree, &a, console_win, input_buffer, &needs_redraw);
                 }
@@ -259,8 +262,10 @@ int main() {
                             int move_key = getch();
                             if (move_key == ERR)
                                 continue;
-                            if (entity_index >= global_objects.entity_count) {
-                                entity_index = global_objects.entity_count % entity_index;
+                            if (global_objects.entity_count > 0) {
+                                entity_index %= global_objects.entity_count;
+                            } else {
+                                entity_index = 0;
                             }
                             switch (move_key) {
                             case KEY_UP:
@@ -285,7 +290,7 @@ int main() {
                             // erase();
                             //  UPDATE => wnoutrefresh(stdscr) instead of refresh() so stdscr and
                             //            console_win flush together in one doupdate inside draw_console_prompt
-                            draw_all_and_refresh(screen_width, &moving, &needs_redraw);
+                            draw_all_and_refresh(screen_width, entity_index, true, &needs_redraw);
                             // TODO : implement a public API to choose whether to make call a draw
                             //  help console or a command console func
                             draw_console_prompt(console_win, input_buffer, status);
@@ -296,8 +301,10 @@ int main() {
                             int move_key = getch();
                             if (move_key == ERR)
                                 continue;
-                            if (relationship_index >= global_objects.relationship_count) {
-                                relationship_index = global_objects.relationship_count % relationship_index;
+                            if (global_objects.relationship_count > 0) {
+                                relationship_index %= global_objects.relationship_count;
+                            } else {
+                                relationship_index = 0;
                             }
                             switch (move_key) {
                             case KEY_UP:
@@ -320,7 +327,7 @@ int main() {
                                 break;
                             }
                             // TODO: remove timing profiling before release
-                            draw_all_and_refresh(screen_width, &moving, &needs_redraw);
+                            draw_all_and_refresh(screen_width, relationship_index, true, &needs_redraw);
                             draw_console_prompt(console_win, input_buffer, status);
                         }
                         break;

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 GlobalObjects global_objects;
+int world_generation = 0;
 
 void init_global_objects() {
     global_objects.entity_count = 0;
@@ -14,22 +15,25 @@ void init_global_objects() {
         global_objects.relationships[i] = NULL;
     }
 
-    undo_stack_init(&global_objects.undo_stack);
+    undo_stack_clear(&global_objects.undo_stack);
 }
 
 void register_entity(Entity *e) {
+    world_generation++;
     if (global_objects.entity_count < MAX_OBJECTS) {
         global_objects.entities[global_objects.entity_count++] = e;
     }
 }
 
 void register_relationship(Relationship *r) {
+    world_generation++;
     if (global_objects.relationship_count < MAX_OBJECTS) {
         global_objects.relationships[global_objects.relationship_count++] = r;
     }
 }
 
 void unregister_relationship(Relationship *r) {
+    world_generation++;
     if (!r) {
         return;
     }
@@ -59,6 +63,7 @@ void unregister_relationship(Relationship *r) {
 }
 
 void unregister_entity(Entity *e) {
+    world_generation++;
     if (!e) {
         return;
     }
