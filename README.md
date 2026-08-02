@@ -58,7 +58,7 @@ The whole thing runs in a TUI with color-coded elements, A* pathfinding for rela
   - `ALTER TABLE ... ADD CONSTRAINT FOREIGN KEY` (no forward-reference issues)
 
 ### Terminal UI
-- **A* pathfinding** for relationship lines that automatically route around entities and other relationships
+- **A* pathfinding** for relationship lines that automatically route around entities and other relationships, backed by a result cache and persistent route grids so only lines near a change are re-routed
 - **Smart attachment points** – multiple relationships on the same entity side get evenly spaced slots so lines do not overlap
 - **Color coding** – entities, relationships, selected items, and connection paths each have distinct colors
 - **Edit mode** – `TAB` to enter move mode, then `e` for entities or `r` for relationships, arrow keys to reposition
@@ -77,9 +77,12 @@ The whole thing runs in a TUI with color-coded elements, A* pathfinding for rela
 - Custom **lexer and tokenizer** with position tracking for error reporting
 - **Abstract Syntax Tree** records every executed command for debugging and history
 - **Binary heap priority queue** for the A* open set
+- **A* result cache** so unchanged routes are not re-searched
+- **Persistent route grids** with per-frame dirty-box detection that only rebuild routes near changed boxes
 - **KMP string search** for the help system
-- **Undo stack** with operation history and full diagram snapshots for complex operations
+- **Undo stack** with operation history and compact heap-allocated diagram snapshots for complex operations
 - **Fast generic vector** (`vec.c/h`) using C macros inspired by Sean Barrett's stb stretchy buffer
+- **Pointer-based render pipeline** that avoids copying the global object registry every frame
 - Cross-platform: Linux, macOS, and Windows (via MinGW/MSYS2)
 
 ---
@@ -123,6 +126,17 @@ make
 ```
 
 This produces the `MyMCD` binary in the project root.
+
+### Profiling build (optional)
+
+To build with the built-in frame profiler, the `perf` command, an on-screen frame-timing overlay, and the `MCD_PERF=1` log hook:
+
+```bash
+make clean
+make PROFILE=1
+```
+
+Run `MCD_PERF=1 ./MyMCD` to log per-frame render time, A* cache hit/miss, and grid rebuild/reuse statistics to `perf.log`. Type `perf` in the app to toggle the live overlay. These features are compiled out of a normal `make` build.
 
 ### Run locally (all platforms)
 ```bash
@@ -186,6 +200,7 @@ Type `help` anytime for the full command reference.
 | `save SQL "file.sql"` | Export SQL (only after MLD conversion) |
 | `clear` | Clear the entire diagram |
 | `help` | Open the help window |
+| `perf` | Toggle the frame-timing overlay (profiling builds only) |
 | `exit` or `quit` | Quit the application |
 
 Property types: `int`, `str`, `double`, `date`, `money`
