@@ -1183,8 +1183,10 @@ void draw_all_relationships(const GlobalObjects *global_objects, int moving_inde
     }
 }
 
+#ifdef MYMCD_PROFILE
 static bool frame_stats_overlay = false;
 static void draw_frame_stats_overlay(void);
+#endif
 
 void draw_all_and_refresh(int screen_width, int moving_index, bool is_moving,
                           bool *needs_redraw) {
@@ -1205,13 +1207,16 @@ void draw_all_and_refresh(int screen_width, int moving_index, bool is_moving,
     frame_relationships_us = (t3.tv_sec - t2.tv_sec) * 1000000L + (t3.tv_nsec - t2.tv_nsec) / 1000L;
     last_frame_us = (t3.tv_sec - t0.tv_sec) * 1000000L + (t3.tv_nsec - t0.tv_nsec) / 1000L;
 
+#ifdef MYMCD_PROFILE
     if (frame_stats_overlay)
         draw_frame_stats_overlay();
+#endif
 
     // queue stdscr and then console_win's doupdate inside draw_console_prompt
     // will flush both together when called right after this in the main loop
     wnoutrefresh(stdscr);
 
+#ifdef MYMCD_PROFILE
     // Testing hook: run with MCD_PERF=1 to log per-frame draw timing + cache
     // hit/miss stats to perf.log.
     static int perf_enabled = -1;
@@ -1219,10 +1224,12 @@ void draw_all_and_refresh(int screen_width, int moving_index, bool is_moving,
         perf_enabled = (getenv("MCD_PERF") != NULL);
     if (perf_enabled)
         print_frame_stats();
+#endif
 
     *needs_redraw = false;
 }
 
+#ifdef MYMCD_PROFILE
 void toggle_frame_stats(void) {
     frame_stats_overlay = !frame_stats_overlay;
     if (frame_stats_overlay) {
@@ -1285,6 +1292,7 @@ void print_frame_stats(void) {
             hit_pct, grid_rebuilds, grid_reuses);
     fflush(log);
 }
+#endif // MYMCD_PROFILE
 
 WINDOW *init_pad(int num_lines, int num_col, HelpWindow hwin) {
     WINDOW *pad = newpad(num_lines, num_col);

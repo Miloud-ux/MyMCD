@@ -48,8 +48,10 @@ void draw_path_with_corners(AStarPath *path);
 void draw_all_entities(const GlobalObjects *global_objects, int moving_index, bool is_moving);
 void draw_all_relationships(const GlobalObjects *global_objects, int moving_index, bool is_moving);
 void draw_all_and_refresh(int screen_width, int moving_index, bool is_moving, bool *needs_redraw);
+#ifdef MYMCD_PROFILE
 void print_frame_stats(void);
 void toggle_frame_stats(void);
+#endif
 
 /* CONSOLE DRAWING FUNCTIONS
  * Console drawing functions call refresh internally

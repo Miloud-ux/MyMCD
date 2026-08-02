@@ -7,6 +7,12 @@ CC     = gcc
 CFLAGS = -Wall -g -Wextra -Isrc -Isrc/DSA
 LIBS   = -lncurses
 
+# Profiling build (perf command, on-screen overlay, MCD_PERF log):
+#   make PROFILE=1
+ifdef PROFILE
+CFLAGS += -DMYMCD_PROFILE
+endif
+
 # -------------------------------------------------------------------------
 # Detect OS for conditional rules
 # -------------------------------------------------------------------------

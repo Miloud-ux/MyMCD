@@ -195,9 +195,11 @@ int main() {
                     // LOG Error :empty command
                 } else if (strcmp(input_buffer, "debug") == 0) {
                     draw_ast_debug_window(debug_window, &tree);
+#ifdef MYMCD_PROFILE
                 } else if (strcmp(input_buffer, "perf") == 0) {
                     toggle_frame_stats();
                     needs_redraw = true;
+#endif
                 } else {
                     execute_command(&tree, &a, console_win, input_buffer, &needs_redraw);
                 }
